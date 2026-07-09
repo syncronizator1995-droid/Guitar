@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#241811">
+<title>Campfire — Phase 1</title>
+<style>
+:root{
+  --night:#241811; --surface:#31221A; --raised:#3D2C21; --raised2:#4A372A;
+  --pearl:#F4ECDF; --taupe:#A08B78; --line:#5A4436; --honey:#E7B978;
+  --brass:#D3A24E; --ember:#E08A3C; --mute:#7C6553;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  font-family:system-ui,'Segoe UI',Roboto,sans-serif;
+  background:radial-gradient(120% 40% at 50% -5%, rgba(224,138,60,.20), transparent 60%), var(--night);
+  color:var(--pearl); min-height:100dvh; display:flex; flex-direction:column;
+  padding-bottom:calc(64px + env(safe-area-inset-bottom));
+}
+.mono{font-family:ui-monospace,'Cascadia Mono',Menlo,monospace}
+header{display:flex;align-items:center;gap:10px;padding:14px 16px 8px}
+header h1{font-size:20px;font-weight:800;letter-spacing:.02em}
+header .phase{color:var(--mute);font-size:11px;margin-left:2px}
+.flame{width:20px;height:20px;fill:var(--ember);filter:drop-shadow(0 0 8px rgba(224,138,60,.6))}
+.spacer{flex:1}
+button{font-family:inherit;border:0;cursor:pointer}
+.btn{background:var(--brass);color:#2a1a0e;font-weight:700;font-size:15px;padding:11px 16px;border-radius:12px}
+.btn.ghost{background:var(--surface);color:var(--pearl);border:1px solid var(--line)}
+.btn.small{padding:8px 12px;font-size:13px}
+.btn:disabled{opacity:.45}
+
+/* Listening strip */
+#strip{
+  margin:4px 12px 8px;padding:10px 14px;border-radius:12px;
+  background:var(--surface);border:1px solid var(--line);
+  display:flex;align-items:center;gap:10px;font-size:14px;min-height:44px;
+  transition:box-shadow .25s,border-color .25s;
+}
+#strip .dot{width:9px;height:9px;border-radius:50%;background:var(--mute);flex:none;transition:.2s}
+#strip.listening .dot{background:var(--ember);animation:pulse 1.4s infinite}
+#strip.heard .dot{background:var(--honey)}
+#strip.good{border-color:var(--brass);box-shadow:0 0 18px rgba(224,138,60,.35)}
+#strip .txt{color:var(--taupe)} #strip .val{color:var(--honey);font-weight:700}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+
+main{flex:1;padding:4px 12px 12px;overflow-y:auto}
+.panel{display:none}.panel.on{display:block}
+.card{background:var(--raised);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px}
+.h2{font-size:15px;font-weight:700;margin-bottom:4px}
+.sub{color:var(--taupe);font-size:13px;line-height:1.45}
+.hint{color:var(--taupe);font-size:12.5px;line-height:1.5;padding:2px 4px}
+.hint b{color:var(--honey)}
+
+/* Needle */
+.bignote{display:flex;align-items:baseline;justify-content:center;gap:8px;margin:2px 0 0}
+.bignote .n{font-size:clamp(64px,24vw,104px);font-weight:800;line-height:1;color:var(--pearl)}
+.bignote .o{font-size:26px;color:var(--taupe);font-weight:700}
+.cents{ text-align:center;font-size:18px;color:var(--taupe);margin:2px 0 6px;min-height:24px}
+.cents .v{color:var(--honey);font-weight:700}
+.cents.good .v{color:var(--ember)}
+#dial{width:min(88vw,340px);display:block;margin:0 auto}
+.targetline{text-align:center;color:var(--taupe);font-size:13px;margin-top:6px;min-height:18px}
+.glowcard{transition:box-shadow .3s}
+.glowcard.good{box-shadow:0 0 0 1px var(--brass),0 0 28px rgba(224,138,60,.4)}
+
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.chip{background:var(--surface);border:1px solid var(--line);color:var(--pearl);
+  border-radius:11px;padding:9px 0;font-weight:700;flex:1;min-width:44px;text-align:center}
+.chip.small{flex:none;padding:9px 14px}
+.chip.on{background:var(--brass);color:#2a1a0e;border-color:var(--brass)}
+.chip .lab{display:block;font-size:10px;font-weight:600;color:inherit;opacity:.75}
+.chip.done{border-color:var(--brass);color:var(--honey)}
+
+.rows{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.row{display:flex;justify-content:space-between;align-items:center;background:var(--surface);
+  border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:14px}
+.row .r{color:var(--honey);font-weight:700}
+.verdict{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--surface);
+  border:1px solid var(--line);font-size:14px;line-height:1.5;display:none}
+.verdict.on{display:block}
+.verdict.good{border-color:var(--brass);box-shadow:0 0 18px rgba(224,138,60,.3)}
+.verdict b{color:var(--honey)}
+
+/* Tab bar */
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;gap:6px;
+  background:rgba(36,24,17,.92);backdrop-filter:blur(8px);
+  border-top:1px solid var(--line);padding:8px 10px calc(8px + env(safe-area-inset-bottom))}
+nav button{flex:1;background:transparent;color:var(--taupe);font-weight:700;font-size:13.5px;
+  padding:11px 0;border-radius:11px}
+nav button.on{background:var(--brass);color:#2a1a0e}
+
+/* Overlays */
+.overlay{position:fixed;inset:0;background:rgba(20,12,7,.94);display:none;
+  align-items:center;justify-content:center;padding:22px;z-index:50}
+.overlay.on{display:flex}
+.sheet{background:var(--raised);border:1px solid var(--line);border-radius:18px;
+  padding:22px;max-width:420px;width:100%}
+.sheet h2{font-size:20px;font-weight:800;margin-bottom:8px}
+.sheet p{color:var(--taupe);font-size:14px;line-height:1.55;margin-bottom:10px}
+.sheet .pledge{color:var(--honey);font-size:13px}
+.bigmeter{font-size:40px;text-align:center;color:var(--honey);font-weight:800;margin:8px 0}
+
+/* Stats drawer */
+#stats{display:none;margin:0 12px 10px;padding:10px 12px;background:var(--surface);
+  border:1px solid var(--line);border-radius:12px;font-size:12px;color:var(--taupe);line-height:1.7}
+#stats.on{display:block}
+#stats b{color:var(--honey);font-weight:700}
+.statbtn{background:transparent;color:var(--mute);font-size:11.5px;padding:6px 10px}
+</style>
+</head>
+<body>
+
+<header>
+  <svg class="flame" viewBox="0 0 24 24"><path d="M12 2c1 3 4 4.2 4 7.8 0 1.1-.4 2-.9 2.7.9.2 1.9 1 1.9 2.9C17 18.6 14.8 21 12 21s-5-2.4-5-5.6c0-2.2 1.3-3.2 2.2-4.4C10.6 9.2 11.4 6.4 12 2z"/></svg>
+  <h1>Campfire</h1><span class="phase mono">phase 1</span>
+  <div class="spacer"></div>
+  <button id="micBtn" class="btn small">Start</button>
+</header>
+
+<div id="strip"><span class="dot"></span><span id="stripTxt" class="txt">Mic is off</span></div>
+
+<main>
+  <!-- TUNE -->
+  <section id="p-tune" class="panel on">
+    <div class="card glowcard" id="tuneCard">
+      <div class="bignote"><span class="n mono" id="noteName">—</span><span class="o mono" id="noteOct"></span></div>
+      <div class="cents" id="centsLine"><span class="v mono" id="centsVal">·</span></div>
+      <svg id="dial" viewBox="0 0 300 168">
+        <path d="M20 150 A130 130 0 0 1 280 150" fill="none" stroke="#5A4436" stroke-width="3"/>
+        <path id="zone" d="" fill="rgba(224,138,60,.22)"/>
+        <g id="ticks" stroke="#7C6553" stroke-width="2"></g>
+        <line id="needle" x1="150" y1="150" x2="150" y2="38" stroke="#E7B978" stroke-width="4" stroke-linecap="round" style="transform-origin:150px 150px;transition:transform .12s"/>
+        <circle cx="150" cy="150" r="7" fill="#D3A24E"/>
+        <text x="30" y="166" fill="#7C6553" font-size="12" class="mono">-50</text>
+        <text x="146" y="30" fill="#7C6553" font-size="12" class="mono">0</text>
+        <text x="252" y="166" fill="#7C6553" font-size="12" class="mono">+50</text>
+      </svg>
+      <div class="targetline" id="targetLine">Pluck a string</div>
+      <div class="chips" id="stringChips"></div>
+      <p class="hint" style="margin-top:10px">Tap a string to lock it, tap again for auto. Tune <b>up</b> to pitch — drop below, then come up.</p>
+    </div>
+  </section>
+
+  <!-- LAB -->
+  <section id="p-lab" class="panel">
+    <div class="card">
+      <div class="h2">Tuning Lab</div>
+      <p class="sub">Pick a target tuning — the needle guides every string toward it.</p>
+      <div class="chips" id="presetChips"></div>
+      <div class="rows" id="presetNotes"></div>
+    </div>
+    <p class="hint">New strings drift — stretch them gently and retune a few times. Temperature changes and capos knock tuning out too; a 30-second check before practice is normal.</p>
+  </section>
+
+  <!-- CAPO -->
+  <section id="p-capo" class="panel">
+    <div class="card">
+      <div class="h2">Capo Check</div>
+      <p class="sub">Clamp the capo just behind the fret, square across the neck. Then pick each string once, thickest first.</p>
+      <div class="chips" id="capoFrets"></div>
+      <div class="chips" id="capoSlots" style="margin-top:12px"></div>
+      <div class="targetline" id="capoPrompt"></div>
+      <div class="verdict" id="capoVerdict"></div>
+      <div class="chips" style="margin-top:12px">
+        <button class="btn ghost small" id="capoReset" style="flex:1">Restart check</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- INTONATION -->
+  <section id="p-into" class="panel">
+    <div class="card">
+      <div class="h2">Fret-12 Intonation Test</div>
+      <p class="sub">The 12th fret should sound exactly one octave above the open string. Pick a string, then follow the two steps. Fret lightly, fingertip just behind the fret.</p>
+      <div class="chips" id="intoStrings"></div>
+      <div class="targetline" id="intoPrompt"></div>
+      <div class="rows" id="intoRows"></div>
+      <div class="verdict" id="intoVerdict"></div>
+    </div>
+    <p class="hint">A string that reads sharp at fret 12 no matter what is an <b>instrument setup</b> issue (saddle position) — a guitar tech's five-minute fix, not your fingers' fault.</p>
+  </section>
+
+  <div id="stats"></div>
+  <div style="text-align:center"><button class="statbtn" id="statsBtn">engine stats</button>
+  <button class="statbtn" id="recalBtn">recalibrate</button></div>
+</main>
+
+<nav>
+  <button data-p="tune" class="on">Tune</button>
+  <button data-p="lab">Lab</button>
+  <button data-p="capo">Capo</button>
+  <button data-p="into">Fret 12</button>
+</nav>
+
+<!-- Mic primer -->
+<div class="overlay on" id="primer">
+  <div class="sheet">
+    <h2>Campfire needs its ears</h2>
+    <p>To tune your guitar and verify your capo, Campfire listens through the microphone.</p>
+    <p class="pledge">Audio is analyzed live on this phone and never recorded, stored, or sent anywhere — the app makes no network requests at all.</p>
+    <p>Chrome will ask for permission once. Play in a reasonably quiet room for best results.</p>
+    <button class="btn" id="primerBtn" style="width:100%">Start listening</button>
+    <p id="primerErr" class="pledge" style="display:none;margin-top:10px;color:#E08A3C"></p>
+  </div>
+</div>
+
+<!-- Calibration -->
+<div class="overlay" id="calib">
+  <div class="sheet">
+    <h2>Room calibration</h2>
+    <p>Stay quiet for a few seconds — Campfire is measuring your room's noise floor so it knows what counts as a note.</p>
+    <div class="bigmeter mono" id="calibNum">3</div>
+    <p id="calibMsg" class="sub" style="text-align:center"></p>
+    <button class="btn ghost" id="calibRetry" style="width:100%;display:none">Try again</button>
+  </div>
+</div>
+
+<script>
+/* Campfire DSP core — Phase 1
+   Pure functions, no DOM, no network. Runs identically in the browser and Node.
+   Pitch detection: McLeod Pitch Method (NSDF via FFT autocorrelation),
+   key-maxima picking with clarity, parabolic interpolation.               */
+"use strict";
+
+/* ---------- FFT (iterative radix-2, in-place, complex) ---------- */
+function makeFFT(n) {
+  const cosT = new Float64Array(n / 2), sinT = new Float64Array(n / 2);
+  for (let i = 0; i < n / 2; i++) {
+    cosT[i] = Math.cos(-2 * Math.PI * i / n);
+    sinT[i] = Math.sin(-2 * Math.PI * i / n);
+  }
+  const rev = new Uint32Array(n);
+  for (let i = 0, j = 0; i < n; i++) {
+    rev[i] = j;
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+  }
+  return function fft(re, im, inverse) {
+    for (let i = 0; i < n; i++) {
+      const r = rev[i];
+      if (r > i) {
+        let t = re[i]; re[i] = re[r]; re[r] = t;
+        t = im[i]; im[i] = im[r]; im[r] = t;
+      }
+    }
+    for (let len = 2; len <= n; len <<= 1) {
+      const half = len >> 1, step = n / len;
+      for (let i = 0; i < n; i += len) {
+        for (let j = 0; j < half; j++) {
+          const k = j * step;
+          const wr = cosT[k], wi = inverse ? -sinT[k] : sinT[k];
+          const a = i + j, b = a + half;
+          const xr = re[b], xi = im[b];
+          const tr = xr * wr - xi * wi, ti = xr * wi + xi * wr;
+          re[b] = re[a] - tr; im[b] = im[a] - ti;
+          re[a] += tr;        im[a] += ti;
+        }
+      }
+    }
+    if (inverse) for (let i = 0; i < n; i++) { re[i] /= n; im[i] /= n; }
+  };
+}
+
+/* ---------- Detector factory ---------- */
+function createDetector(opts) {
+  const sampleRate = opts.sampleRate;
+  const W    = opts.windowSize || 2048;
+  const fMin = opts.fMin || 60;
+  const fMax = opts.fMax || 1000;
+  const K    = opts.k || 0.93;           // MPM pick threshold vs highest maximum
+  const FN   = W * 2;                    // zero-padded FFT size for autocorrelation
+  const fft  = makeFFT(FN);
+  const re = new Float64Array(FN), im = new Float64Array(FN);
+  const nsdf = new Float64Array(W);
+  const prefix = new Float64Array(W + 1);
+  const tauMin = Math.max(2, Math.floor(sampleRate / fMax));
+  const tauMax = Math.min(W - 2, Math.ceil(sampleRate / fMin));
+
+  function detect(x) {
+    /* RMS (input is already high-pass filtered upstream) */
+    let sum2 = 0;
+    for (let i = 0; i < W; i++) sum2 += x[i] * x[i];
+    const rms = Math.sqrt(sum2 / W);
+    if (rms < 1e-6) return { freq: 0, clarity: 0, rms };
+
+    /* autocorrelation r(tau) via FFT: r = IFFT(|FFT(x,0-pad)|^2) */
+    for (let i = 0; i < W; i++) { re[i] = x[i]; im[i] = 0; }
+    for (let i = W; i < FN; i++) { re[i] = 0; im[i] = 0; }
+    fft(re, im, false);
+    for (let i = 0; i < FN; i++) {
+      const p = re[i] * re[i] + im[i] * im[i];
+      re[i] = p; im[i] = 0;
+    }
+    fft(re, im, true);                    // re[tau] now holds r(tau)
+
+    /* m(tau) in O(1) each via prefix sums of squares */
+    prefix[0] = 0;
+    for (let i = 0; i < W; i++) prefix[i + 1] = prefix[i] + x[i] * x[i];
+    const total = prefix[W];
+
+    for (let t = 0; t < W; t++) {
+      const m = prefix[W - t] + (total - prefix[t]);
+      nsdf[t] = m > 1e-12 ? (2 * re[t]) / m : 0;
+    }
+
+    /* key maxima between positive-going zero crossings.
+       First exit the zero-lag lobe, then collect maxima; only maxima whose
+       peak sits inside [tauMin, tauMax] become candidates.                 */
+    let bestVal = -1;
+    const maxTau = [], maxVal = [];
+    let t = 1;
+    while (t <= tauMax && nsdf[t] > 0) t++;          // skip the zero-lag lobe
+    let inRegion = false, curTau = 0, curVal = -1;
+    for (; t <= tauMax; t++) {
+      const v = nsdf[t];
+      if (!inRegion) {
+        if (v > 0) { inRegion = true; curTau = t; curVal = v; }
+      } else if (v <= 0) {
+        if (curTau >= tauMin) {
+          maxTau.push(curTau); maxVal.push(curVal);
+          if (curVal > bestVal) bestVal = curVal;
+        }
+        inRegion = false;
+      } else if (v > curVal) { curVal = v; curTau = t; }
+    }
+    if (inRegion && curTau >= tauMin) {
+      maxTau.push(curTau); maxVal.push(curVal);
+      if (curVal > bestVal) bestVal = curVal;
+    }
+    if (bestVal <= 0 || maxTau.length === 0) return { freq: 0, clarity: 0, rms };
+
+    /* first maximum above K * best — MPM's octave-error defense */
+    const thr = K * bestVal;
+    let tP = -1, vP = 0;
+    for (let i = 0; i < maxTau.length; i++) {
+      if (maxVal[i] >= thr) { tP = maxTau[i]; vP = maxVal[i]; break; }
+    }
+    if (tP < 2 || tP > W - 2) return { freq: 0, clarity: 0, rms };
+
+    /* parabolic interpolation for sub-sample lag */
+    const y1 = nsdf[tP - 1], y2 = nsdf[tP], y3 = nsdf[tP + 1];
+    const denom = (y1 - 2 * y2 + y3);
+    let shift = 0;
+    if (Math.abs(denom) > 1e-12) shift = 0.5 * (y1 - y3) / denom;
+    if (shift > 0.5) shift = 0.5; else if (shift < -0.5) shift = -0.5;
+    const period = tP + shift;
+    const freq = sampleRate / period;
+    if (freq < fMin * 0.9 || freq > fMax * 1.1) return { freq: 0, clarity: 0, rms };
+    return { freq, clarity: vP, rms };
+  }
+
+  return { detect, sampleRate, windowSize: W, tauMin, tauMax };
+}
+
+/* ---------- Note math ---------- */
+const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+
+function freqOfMidi(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+
+function noteFromFreq(f) {
+  const n = 69 + 12 * Math.log2(f / 440);
+  const midi = Math.round(n);
+  return {
+    midi,
+    cents: (n - midi) * 100,
+    name: NOTE_NAMES[((midi % 12) + 12) % 12],
+    octave: Math.floor(midi / 12) - 1,
+  };
+}
+
+function centsBetween(f, fRef) { return 1200 * Math.log2(f / fRef); }
+
+function median(arr) {
+  const a = Array.from(arr).sort((x, y) => x - y);
+  const h = a.length >> 1;
+  return a.length % 2 ? a[h] : (a[h - 1] + a[h]) / 2;
+}
+
+/* ---------- exports (Node) / globals (browser) ---------- */
+const CampfireDSP = { makeFFT, createDetector, freqOfMidi, noteFromFreq,
+                      centsBetween, median, NOTE_NAMES };
+if (typeof module !== "undefined" && module.exports) module.exports = CampfireDSP;
+if (typeof window !== "undefined") window.CampfireDSP = CampfireDSP;
+
+</script>
+<script>
+"use strict";
+const D = window.CampfireDSP;
+
+/* ---------------- config ---------------- */
+const CLARITY_MIN = 0.90;
+const GATE_ABS    = 0.0035;
+const STABLE_SPREAD_C = 25;
+const PRESETS = {
+  standard:{label:"Standard", midis:[40,45,50,55,59,64]},
+  dropd:   {label:"Drop D",   midis:[38,45,50,55,59,64]},
+  eb:      {label:"Eb Std",   midis:[39,44,49,54,58,63]},
+  openg:   {label:"Open G",   midis:[38,43,50,55,59,62]},
+};
+const noteLabel = m => { const n=D.noteFromFreq(D.freqOfMidi(m)); return n.name+n.octave; };
+
+/* ---------------- app state ---------------- */
+const App = {
+  ctx:null, node:null, stream:null, running:false,
+  floor: parseFloat(localStorage.getItem("cf_floor")||"0")||0,
+  preset: localStorage.getItem("cf_preset")||"standard",
+  lock:-1, mode:"tune",
+  frames:[], stable:null, stableSince:0, lastValidAt:0,
+  fpsCount:0, fps:0, lastRms:0, lastClar:0, trackInfo:"",
+  wakeLock:null,
+  capture:null, cooldownUntil:0,
+};
+
+/* ---------------- helpers ---------------- */
+const $ = id => document.getElementById(id);
+const gate = () => Math.max(App.floor, GATE_ABS);
+const now = () => performance.now();
+
+/* ---------------- audio pipeline ---------------- */
+const WORKLET_SRC = `
+class Tap extends AudioWorkletProcessor{
+  constructor(){super();this.buf=new Float32Array(2048);this.w=0;this.since=0;
+    this.px=0;this.py=0;this.a=Math.exp(-2*Math.PI*40/sampleRate);this.hop=1024;}
+  process(inputs){const ch=inputs[0][0];if(!ch)return true;
+    for(let i=0;i<ch.length;i++){
+      const x=ch[i];const y=this.a*(this.py+x-this.px);this.px=x;this.py=y;
+      this.buf[this.w]=y;this.w=(this.w+1)&2047;this.since++;
+      if(this.since>=this.hop){this.since=0;
+        const out=new Float32Array(2048);const p=this.w;
+        out.set(this.buf.subarray(p));out.set(this.buf.subarray(0,p),2048-p);
+        this.port.postMessage(out,[out.buffer]);}}
+    return true;}}
+registerProcessor("campfire-tap",Tap);`;
+
+async function initAudio(){
+  const constraints = { audio:{ echoCancellation:false, noiseSuppression:false, autoGainControl:false } };
+  App.stream = await navigator.mediaDevices.getUserMedia(constraints);
+  const track = App.stream.getAudioTracks()[0];
+  const s = track.getSettings ? track.getSettings() : {};
+  App.trackInfo = `EC:${s.echoCancellation===false?"off":"ON?"} NS:${s.noiseSuppression===false?"off":"ON?"} AGC:${s.autoGainControl===false?"off":"ON?"}`;
+  App.ctx = new (window.AudioContext||window.webkitAudioContext)();
+  await App.ctx.resume();
+  App.det = D.createDetector({ sampleRate: App.ctx.sampleRate, fMin:60, fMax:1000 });
+  const src = App.ctx.createMediaStreamSource(App.stream);
+  if (App.ctx.audioWorklet){
+    const url = URL.createObjectURL(new Blob([WORKLET_SRC],{type:"application/javascript"}));
+    await App.ctx.audioWorklet.addModule(url);
+    App.node = new AudioWorkletNode(App.ctx,"campfire-tap");
+    App.node.port.onmessage = e => onWindow(e.data);
+    src.connect(App.node);
+  } else { // legacy fallback
+    const sp = App.ctx.createScriptProcessor(2048,1,1);
+    let px=0,py=0; const a=Math.exp(-2*Math.PI*40/App.ctx.sampleRate);
+    sp.onaudioprocess = e => {
+      const inp = e.inputBuffer.getChannelData(0);
+      const out = new Float32Array(2048);
+      for(let i=0;i<2048;i++){const x=inp[i];py=a*(py+x-px);px=x;out[i]=py;}
+      onWindow(out);
+    };
+    src.connect(sp); sp.connect(App.ctx.destination); App.node=sp;
+  }
+  App.running = true;
+  requestWake();
+  setInterval(()=>{App.fps=App.fpsCount;App.fpsCount=0;renderStats();},1000);
+}
+
+function stopAudio(){
+  App.running=false;
+  if(App.stream) App.stream.getTracks().forEach(t=>t.stop());
+  if(App.ctx) App.ctx.close();
+  App.ctx=null; App.node=null; App.stream=null;
+  releaseWake();
+  setStrip("idle","Mic is off");
+  $("micBtn").textContent="Start";
+}
+
+/* ---------------- wake lock ---------------- */
+async function requestWake(){
+  try{ if("wakeLock" in navigator){ App.wakeLock = await navigator.wakeLock.request("screen"); } }catch(e){}
+}
+function releaseWake(){ try{ App.wakeLock && App.wakeLock.release(); }catch(e){} App.wakeLock=null; }
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible" && App.running) requestWake(); });
+
+/* ---------------- frame handling ---------------- */
+function onWindow(buf){
+  if(!App.running) return;
+  App.fpsCount++;
+  const r = App.det.detect(buf);
+  App.lastRms=r.rms; App.lastClar=r.clarity;
+  if (calibrating){ calibSamples.push(r.rms); return; }
+  const valid = r.rms > gate() && r.clarity > CLARITY_MIN && r.freq > 0;
+  const t = now();
+  App.frames.push({t, f: valid ? r.freq : 0});
+  if (App.frames.length > 10) App.frames.shift();
+  if (valid) App.lastValidAt = t;
+
+  /* stability: >=4 of the last 5 frames voiced, spread <= 25 cents */
+  const recent = App.frames.slice(-5).filter(fr => fr.f > 0 && t - fr.t < 700);
+  let stable = null;
+  if (recent.length >= 4){
+    const fs = recent.map(fr=>fr.f);
+    const med = D.median(fs);
+    const spread = Math.max(...fs.map(f=>Math.abs(D.centsBetween(f,med))));
+    if (spread <= STABLE_SPREAD_C) stable = med;
+  }
+  if (stable){ if(!App.stable) App.stableSince = t; App.stable = stable; }
+  else if (t - App.lastValidAt > 250){ App.stable = null; }
+
+  feedCapture(t);
+  render(t);
+}
+
+/* ---------------- capture engine (capo / intonation) ---------------- */
+function armCapture(validate, onDone, onWrong){
+  App.capture = { validate, onDone, onWrong, buf:[], wrongAt:0 };
+}
+function feedCapture(t){
+  const c = App.capture;
+  if (!c || t < App.cooldownUntil) return;
+  if (!App.stable){ c.buf.length=0; return; }
+  const v = c.validate(App.stable);
+  if (v.ok){
+    c.buf.push(App.stable);
+    if (c.buf.length >= 5){
+      const med = D.median(c.buf);
+      App.capture = null;
+      App.cooldownUntil = t + 700;      // require a beat before the next capture
+      onCaptureDone(c, med);
+    }
+  } else {
+    c.buf.length = 0;
+    if (c.onWrong && t - c.wrongAt > 900){ c.wrongAt = t; c.onWrong(App.stable, v); }
+  }
+}
+function onCaptureDone(c, freq){ c.onDone(freq); }
+
+/* ---------------- listening strip ---------------- */
+function setStrip(state, text, good){
+  const el = $("strip");
+  el.className = state + (good ? " good" : "");
+  $("stripTxt").innerHTML = text;
+}
+
+/* ---------------- TUNER ---------------- */
+function currentMidis(){ return PRESETS[App.preset].midis; }
+function nearestTarget(f){
+  const ms = currentMidis();
+  if (App.lock >= 0) return {i:App.lock, midi:ms[App.lock]};
+  let best=0, bestAbs=1e9;
+  ms.forEach((m,i)=>{ const c=Math.abs(D.centsBetween(f, D.freqOfMidi(m))); if(c<bestAbs){bestAbs=c;best=i;} });
+  return {i:best, midi:ms[best]};
+}
+let inTuneSince = 0;
+function renderTuner(t){
+  const f = App.stable;
+  if (!f){
+    $("noteName").textContent="—"; $("noteOct").textContent="";
+    $("centsVal").textContent="·"; $("centsLine").className="cents";
+    $("targetLine").textContent = App.lock>=0 ? `Locked: string ${6-App.lock} → ${noteLabel(currentMidis()[App.lock])}` : "Pluck a string";
+    $("needle").style.transform="rotate(0deg)";
+    $("tuneCard").classList.remove("good");
+    inTuneSince=0;
+    return;
+  }
+  const n = D.noteFromFreq(f);
+  const tgt = nearestTarget(f);
+  const cents = D.centsBetween(f, D.freqOfMidi(tgt.midi));
+  $("noteName").textContent = n.name; $("noteOct").textContent = n.octave;
+  const cl = Math.max(-50, Math.min(50, cents));
+  $("needle").style.transform = `rotate(${cl*1.5}deg)`;
+  $("centsVal").textContent = (cents>=0?"+":"") + cents.toFixed(0) + " cents";
+  $("targetLine").textContent = `target ${noteLabel(tgt.midi)} · string ${6-tgt.i}${App.lock>=0?" (locked)":""}`;
+  const good = Math.abs(cents) <= 5;
+  if (good && !inTuneSince) inTuneSince = t;
+  if (!good) inTuneSince = 0;
+  const held = good && (t - inTuneSince > 500);
+  $("centsLine").className = "cents" + (held ? " good":"");
+  $("tuneCard").classList.toggle("good", held);
+  if (held) $("centsVal").textContent = "In tune ✓";
+}
+function buildStringChips(){
+  const box = $("stringChips"); box.innerHTML="";
+  currentMidis().forEach((m,i)=>{
+    const b=document.createElement("button");
+    b.className="chip"+(App.lock===i?" on":"");
+    b.innerHTML=`<span class="mono">${noteLabel(m)}</span><span class="lab">str ${6-i}</span>`;
+    b.onclick=()=>{ App.lock = (App.lock===i? -1 : i); buildStringChips(); };
+    box.appendChild(b);
+  });
+}
+
+/* ---------------- LAB ---------------- */
+function buildLab(){
+  const box=$("presetChips"); box.innerHTML="";
+  Object.entries(PRESETS).forEach(([k,p])=>{
+    const b=document.createElement("button");
+    b.className="chip"+(App.preset===k?" on":"");
+    b.textContent=p.label;
+    b.onclick=()=>{ App.preset=k; localStorage.setItem("cf_preset",k); App.lock=-1;
+      buildLab(); buildStringChips(); resetCapo(); resetInto(); };
+    box.appendChild(b);
+  });
+  const rows=$("presetNotes"); rows.innerHTML="";
+  const r=document.createElement("div"); r.className="row";
+  r.innerHTML=`<span>Strings 6 → 1</span><span class="r mono">${currentMidis().map(noteLabel).join("  ")}</span>`;
+  rows.appendChild(r);
+}
+
+/* ---------------- CAPO CHECK ---------------- */
+const Capo = { fret:2, idx:0, results:[] };
+function buildCapoFrets(){
+  const box=$("capoFrets"); box.innerHTML="";
+  for(let f=1; f<=7; f++){
+    const b=document.createElement("button");
+    b.className="chip small"+(Capo.fret===f?" on":"");
+    b.textContent="fret "+f;
+    b.onclick=()=>{ Capo.fret=f; resetCapo(); };
+    box.appendChild(b);
+  }
+}
+function buildCapoSlots(){
+  const box=$("capoSlots"); box.innerHTML="";
+  currentMidis().forEach((m,i)=>{
+    const b=document.createElement("button");
+    const res=Capo.results[i];
+    b.className="chip"+(i===Capo.idx && res===undefined ?" on":"")+(res!==undefined?" done":"");
+    b.disabled=true;
+    b.innerHTML = res!==undefined
+      ? `<span class="mono">${(res>=0?"+":"")}${res.toFixed(0)}c</span><span class="lab">str ${6-i}</span>`
+      : `<span class="mono">${noteLabel(m+Capo.fret)}</span><span class="lab">str ${6-i}</span>`;
+    box.appendChild(b);
+  });
+}
+function resetCapo(){
+  Capo.idx=0; Capo.results=[];
+  $("capoVerdict").className="verdict";
+  buildCapoFrets(); buildCapoSlots(); armCapoStep();
+}
+function armCapoStep(){
+  if (App.mode!=="capo") return;
+  if (Capo.idx>=6){ capoVerdict(); return; }
+  const openM = currentMidis()[Capo.idx];
+  const expectM = openM + Capo.fret;
+  $("capoPrompt").textContent = `Pick string ${6-Capo.idx} — expecting ${noteLabel(expectM)}`;
+  armCapture(
+    f => ({ ok: Math.abs(D.centsBetween(f, D.freqOfMidi(expectM))) <= 60 }),
+    f => {
+      Capo.results[Capo.idx] = D.centsBetween(f, D.freqOfMidi(expectM));
+      Capo.idx++; buildCapoSlots(); armCapoStep();
+    },
+    f => {
+      const heard = D.noteFromFreq(f);
+      const offWhole = D.centsBetween(f, D.freqOfMidi(expectM));
+      let extra = "";
+      if (Math.abs(offWhole-100)<45) extra = " — sounds a fret high, check the capo fret";
+      else if (Math.abs(offWhole+100)<45) extra = " — sounds a fret low, check the capo fret";
+      $("capoPrompt").textContent = `Hearing ${heard.name}${heard.octave}, expecting ${noteLabel(expectM)}${extra}`;
+    }
+  );
+}
+function capoVerdict(){
+  $("capoPrompt").textContent = "";
+  const r = Capo.results, mx=Math.max(...r), mn=Math.min(...r);
+  const avg = r.reduce((a,b)=>a+b,0)/6;
+  const el = $("capoVerdict");
+  let good=false, msg;
+  if (Math.max(...r.map(Math.abs)) <= 8){ good=true;
+    msg = `<b>Seated well ✓</b> Every string within ±8 cents of perfect. Play on.`; }
+  else if (mx - mn > 25){
+    msg = `<b>Uneven pressure.</b> Strings differ by ${(mx-mn).toFixed(0)} cents across the neck. Reseat the capo square, directly behind the fret.`; }
+  else if (avg >= 8){
+    msg = `<b>Pulling sharp</b> by about ${avg.toFixed(0)} cents on average — classic spring-capo squeeze. Reseat closer to the fret with lighter pressure, then re-check.`; }
+  else if (avg <= -8){
+    msg = `<b>Reading flat.</b> That usually means the open tuning drifted — pop the capo off, retune on the Tune tab, and run the check again.`; }
+  else {
+    const worst = r.map((c,i)=>({c,i})).sort((a,b)=>Math.abs(b.c)-Math.abs(a.c))[0];
+    msg = `<b>Close.</b> String ${6-worst.i} is ${(worst.c>=0?"+":"")}${worst.c.toFixed(0)} cents out — nudge the capo or that string and re-check.`; }
+  el.innerHTML = msg;
+  el.className = "verdict on" + (good?" good":"");
+}
+
+/* ---------------- INTONATION ---------------- */
+const Into = { str:0, step:0, fOpen:0, results:{} };
+function buildIntoStrings(){
+  const box=$("intoStrings"); box.innerHTML="";
+  currentMidis().forEach((m,i)=>{
+    const b=document.createElement("button");
+    b.className="chip"+(Into.str===i?" on":"");
+    b.innerHTML=`<span class="mono">${noteLabel(m)}</span><span class="lab">str ${6-i}</span>`;
+    b.onclick=()=>{ Into.str=i; Into.step=0; buildIntoStrings(); armIntoStep(); };
+    box.appendChild(b);
+  });
+}
+function resetInto(){ Into.str=0; Into.step=0; Into.results={}; $("intoRows").innerHTML="";
+  $("intoVerdict").className="verdict"; buildIntoStrings(); armIntoStep(); }
+function armIntoStep(){
+  if (App.mode!=="into") return;
+  const openM = currentMidis()[Into.str];
+  if (Into.step===0){
+    $("intoPrompt").textContent = `Step 1 — pluck string ${6-Into.str} OPEN (${noteLabel(openM)}), let it ring`;
+    armCapture(
+      f => ({ ok: Math.abs(D.centsBetween(f, D.freqOfMidi(openM))) <= 60 }),
+      f => { Into.fOpen=f; Into.step=1; armIntoStep(); },
+      f => { const h=D.noteFromFreq(f);
+        $("intoPrompt").textContent=`Hearing ${h.name}${h.octave} — expecting open ${noteLabel(openM)}. Tune first if needed.`; }
+    );
+  } else {
+    $("intoPrompt").textContent = `Step 2 — now fret the SAME string at fret 12 and pluck`;
+    armCapture(
+      f => ({ ok: Math.abs(D.centsBetween(f, 2*Into.fOpen)) <= 60 }),
+      f => {
+        const dev = D.centsBetween(f, Into.fOpen) - 1200;
+        Into.results[Into.str]=dev; Into.step=0; renderIntoRows(); intoVerdict(dev);
+      },
+      f => { const h=D.noteFromFreq(f);
+        $("intoPrompt").textContent=`Hearing ${h.name}${h.octave} — expecting the octave at fret 12.`; }
+    );
+  }
+}
+function renderIntoRows(){
+  const rows=$("intoRows"); rows.innerHTML="";
+  Object.entries(Into.results).forEach(([i,dev])=>{
+    const r=document.createElement("div"); r.className="row";
+    r.innerHTML=`<span>String ${6-i}</span><span class="r mono">${dev>=0?"+":""}${dev.toFixed(1)} cents at fret 12</span>`;
+    rows.appendChild(r);
+  });
+}
+function intoVerdict(dev){
+  const el=$("intoVerdict"); const a=Math.abs(dev); let good=false, msg;
+  if (a<=3){ good=true; msg=`<b>Spot on ✓</b> This string's intonation is fine.`; }
+  else if (a<=8){ msg=`<b>Slightly ${dev>0?"sharp":"flat"} (${dev.toFixed(1)}c).</b> Try again fretting as lightly as possible, fingertip right behind the fret — finger pressure alone can cause this much.`; }
+  else { msg=`<b>${dev>0?"Sharp":"Flat"} by ${dev.toFixed(1)} cents.</b> If this repeats with light fretting and fresh tuning, the saddle needs adjusting — a quick, cheap job for a guitar tech. Not your fingers' fault.`; }
+  el.innerHTML=msg; el.className="verdict on"+(good?" good":"");
+}
+
+/* ---------------- render loop ---------------- */
+function render(t){
+  if (!App.running) return;
+  if (App.mode==="tune"||App.mode==="lab") renderTuner(t);
+  /* strip */
+  if (App.stable){
+    const n=D.noteFromFreq(App.stable);
+    setStrip("heard", `hearing <span class="val mono">${n.name}${n.octave}</span> <span class="mono">${(n.cents>=0?"+":"")}${n.cents.toFixed(0)}c</span>`,
+      App.mode==="tune" && $("tuneCard").classList.contains("good"));
+  } else {
+    setStrip("listening","listening…");
+  }
+}
+setInterval(()=>{ if(App.running && !App.stable && now()-App.lastValidAt>400) render(now()); }, 300);
+
+/* ---------------- calibration ---------------- */
+let calibrating=false, calibSamples=[];
+function runCalibration(){
+  calibrating=true; calibSamples=[];
+  $("calib").classList.add("on");
+  $("calibMsg").textContent=""; $("calibRetry").style.display="none";
+  let left=3;
+  $("calibNum").textContent=left;
+  const iv=setInterval(()=>{
+    left--; $("calibNum").textContent=left>0?left:"…";
+    if(left<=0){ clearInterval(iv); finishCalibration(); }
+  },1000);
+}
+function finishCalibration(){
+  calibrating=false;
+  const med = calibSamples.length? D.median(calibSamples) : 0;
+  const floor = Math.max(med*4, 0.0025);
+  if (floor > 0.02){
+    $("calibNum").textContent="✗";
+    $("calibMsg").textContent="That room is loud (floor "+floor.toFixed(3)+"). Find somewhere quieter, or expect the ear to hesitate.";
+    $("calibRetry").style.display="block";
+    App.floor=floor; localStorage.setItem("cf_floor",String(floor));
+    return;
+  }
+  App.floor=floor; localStorage.setItem("cf_floor",String(floor));
+  $("calibNum").textContent="✓";
+  $("calibMsg").textContent="Noise floor set at "+floor.toFixed(4)+". You're ready.";
+  setTimeout(()=>$("calib").classList.remove("on"), 900);
+}
+$("calibRetry").onclick=runCalibration;
+$("recalBtn").onclick=()=>{ if(App.running) runCalibration(); };
+
+/* ---------------- stats ---------------- */
+function renderStats(){
+  if(!$("stats").classList.contains("on")) return;
+  $("stats").innerHTML =
+    `build <b>phase-1.1</b> · sampleRate <b>${App.ctx?App.ctx.sampleRate:"—"}</b> · hop <b>1024</b> · frames/s <b>${App.fps}</b><br>`+
+    `constraints ${App.trackInfo||"—"}<br>`+
+    `noise floor <b>${App.floor.toFixed(4)}</b> · gate <b>${gate().toFixed(4)}</b> · rms <b>${App.lastRms.toFixed(4)}</b> · clarity <b>${App.lastClar.toFixed(3)}</b> (min ${CLARITY_MIN})`;
+}
+$("statsBtn").onclick=()=>{ $("stats").classList.toggle("on"); renderStats(); };
+
+/* ---------------- nav / lifecycle ---------------- */
+document.querySelectorAll("nav button").forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll("nav button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on");
+    App.mode=b.dataset.p; App.capture=null;
+    document.querySelectorAll(".panel").forEach(p=>p.classList.remove("on"));
+    $("p-"+App.mode).classList.add("on");
+    if(App.mode==="capo") armCapoStep();
+    if(App.mode==="into") armIntoStep();
+  };
+});
+$("micBtn").onclick=()=>{
+  if(App.running){ stopAudio(); }
+  else { $("primer").classList.add("on"); }
+};
+$("primerBtn").onclick=async ()=>{
+  try{
+    await initAudio();
+    $("primer").classList.remove("on");
+    $("micBtn").textContent="Stop";
+    setStrip("listening","listening…");
+    if(!App.floor) runCalibration();
+  }catch(e){
+    const el=$("primerErr");
+    el.style.display="block";
+    el.textContent = (e && e.name==="NotAllowedError")
+      ? "Microphone blocked. In Chrome: tap the icon left of the address bar → Permissions → Microphone → Allow, then reload."
+      : "Couldn't open the microphone: "+(e.message||e.name||e);
+  }
+};
+
+/* dial ticks + in-tune zone */
+(function(){
+  const g=$("ticks");
+  for(let c=-50;c<=50;c+=10){
+    const a=(c*1.5-90)*Math.PI/180, r1=118,r2=c%50===0?104:110;
+    const x1=150+r1*Math.cos(a),y1=150+r1*Math.sin(a);
+    const x2=150+r2*Math.cos(a),y2=150+r2*Math.sin(a);
+    g.innerHTML+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+  }
+  const a1=(-5*1.5-90)*Math.PI/180, a2=(5*1.5-90)*Math.PI/180, R=130;
+  const x1=150+R*Math.cos(a1),y1=150+R*Math.sin(a1);
+  const x2=150+R*Math.cos(a2),y2=150+R*Math.sin(a2);
+  $("zone").setAttribute("d",`M150 150 L${x1} ${y1} A${R} ${R} 0 0 1 ${x2} ${y2} Z`);
+})();
+
+/* initial UI */
+buildStringChips(); buildLab(); resetCapo(); resetInto();
+setStrip("idle","Mic is off — tap Start");
+</script>
+</body>
+</html>
