@@ -1,0 +1,3479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#241811">
+<title>Campfire</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{
+  --night:#241811; --surface:#31221A; --raised:#3D2C21; --raised2:#4A372A;
+  --pearl:#F4ECDF; --taupe:#A08B78; --line:#5A4436; --honey:#E7B978;
+  --brass:#D3A24E; --ember:#E08A3C; --mute:#7C6553;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  font-family:system-ui,'Segoe UI',Roboto,sans-serif;
+  background:radial-gradient(120% 40% at 50% -5%, rgba(224,138,60,.20), transparent 60%), var(--night);
+  color:var(--pearl); min-height:100dvh; display:flex; flex-direction:column;
+  padding-bottom:calc(64px + env(safe-area-inset-bottom));
+}
+.mono{font-family:ui-monospace,'Cascadia Mono',Menlo,monospace}
+header{display:flex;align-items:center;gap:10px;padding:14px 16px 8px}
+header h1{font-size:20px;font-weight:800;letter-spacing:.02em}
+header .phase{color:var(--mute);font-size:11px;margin-left:2px}
+.flame{width:20px;height:20px;fill:var(--ember);filter:drop-shadow(0 0 8px rgba(224,138,60,.6))}
+.spacer{flex:1}
+button{font-family:inherit;border:0;cursor:pointer}
+.btn{background:var(--brass);color:#2a1a0e;font-weight:700;font-size:15px;padding:11px 16px;border-radius:12px}
+.btn.ghost{background:var(--surface);color:var(--pearl);border:1px solid var(--line)}
+.btn.small{padding:8px 12px;font-size:13px}
+.btn:disabled{opacity:.45}
+
+/* Listening strip */
+#strip{
+  margin:4px 12px 8px;padding:10px 14px;border-radius:12px;
+  background:var(--surface);border:1px solid var(--line);
+  display:flex;align-items:center;gap:10px;font-size:14px;min-height:44px;
+  transition:box-shadow .25s,border-color .25s;
+}
+#strip .dot{width:9px;height:9px;border-radius:50%;background:var(--mute);flex:none;transition:.2s}
+#strip.listening .dot{background:var(--ember);animation:pulse 1.4s infinite}
+#strip.heard .dot{background:var(--honey)}
+#strip.good{border-color:var(--brass);box-shadow:0 0 18px rgba(224,138,60,.35)}
+#strip .txt{color:var(--taupe)} #strip .val{color:var(--honey);font-weight:700}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+
+main{flex:1;padding:4px 12px 12px;overflow-y:auto}
+.panel{display:none}.panel.on{display:block}
+.card{background:var(--raised);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px}
+.h2{font-size:15px;font-weight:700;margin-bottom:4px}
+.sub{color:var(--taupe);font-size:13px;line-height:1.45}
+.hint{color:var(--taupe);font-size:12.5px;line-height:1.5;padding:2px 4px}
+.hint b{color:var(--honey)}
+
+/* Needle */
+.bignote{display:flex;align-items:baseline;justify-content:center;gap:8px;margin:2px 0 0}
+.bignote .n{font-size:clamp(64px,24vw,104px);font-weight:800;line-height:1;color:var(--pearl)}
+.bignote .o{font-size:26px;color:var(--taupe);font-weight:700}
+.cents{ text-align:center;font-size:18px;color:var(--taupe);margin:2px 0 6px;min-height:24px}
+.cents .v{color:var(--honey);font-weight:700}
+.cents.good .v{color:var(--ember)}
+#dial{width:min(88vw,340px);display:block;margin:0 auto}
+.targetline{text-align:center;color:var(--taupe);font-size:13px;margin-top:6px;min-height:18px}
+.glowcard{transition:box-shadow .3s}
+.glowcard.good{box-shadow:0 0 0 1px var(--brass),0 0 28px rgba(224,138,60,.4)}
+
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.chip{background:var(--surface);border:1px solid var(--line);color:var(--pearl);
+  border-radius:11px;padding:9px 0;font-weight:700;flex:1;min-width:44px;text-align:center}
+.chip.small{flex:none;padding:9px 14px}
+.chip.on{background:var(--brass);color:#2a1a0e;border-color:var(--brass)}
+.chip .lab{display:block;font-size:10px;font-weight:600;color:inherit;opacity:.75}
+.chip.done{border-color:var(--brass);color:var(--honey)}
+
+.rows{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.row{display:flex;justify-content:space-between;align-items:center;background:var(--surface);
+  border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:14px}
+.row .r{color:var(--honey);font-weight:700}
+.verdict{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--surface);
+  border:1px solid var(--line);font-size:14px;line-height:1.5;display:none}
+.verdict.on{display:block}
+.verdict.good{border-color:var(--brass);box-shadow:0 0 18px rgba(224,138,60,.3)}
+.verdict b{color:var(--honey)}
+
+/* Tab bar */
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;gap:4px;
+  background:rgba(36,24,17,.92);backdrop-filter:blur(8px);
+  border-top:1px solid var(--line);padding:8px 6px calc(8px + env(safe-area-inset-bottom))}
+nav button{flex:1;min-width:0;background:transparent;color:var(--taupe);font-weight:700;font-size:10px;
+  padding:10px 0;border-radius:8px;letter-spacing:-.02em}
+nav button.on{background:var(--brass);color:#2a1a0e}
+
+.sub{display:none}.sub.on{display:block}
+.subnav{margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.lane{position:relative;height:34px;background:var(--surface);border:1px solid var(--line);border-radius:10px;margin:10px 0}
+.lane .mid{position:absolute;left:50%;top:4px;bottom:4px;width:2px;background:var(--brass)}
+.lane .mark{position:absolute;top:7px;width:8px;height:20px;border-radius:4px;background:var(--honey);transform:translateX(-50%)}
+.bigdelta{text-align:center;font-size:26px;font-weight:800;min-height:34px}
+
+.cdiag{width:170px;height:auto;display:block;margin:4px auto 2px}
+.strings6{display:flex;flex-direction:column;gap:5px;margin-top:10px}
+.srow{display:flex;justify-content:space-between;align-items:center;background:var(--surface);
+  border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:13.5px}
+.srow.on{border-color:var(--brass);background:var(--raised2)}
+.srow.ok{border-color:var(--brass)}
+.srow .tag{color:var(--honey);font-weight:700}
+.big2{font-size:44px;font-weight:800;text-align:center;line-height:1.1}
+.seg{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);
+  border-radius:13px;padding:13px 14px;margin-bottom:8px;width:100%;text-align:left;cursor:pointer}
+.seg.done{border-color:var(--brass);background:var(--raised2)}
+.seg .num{width:30px;height:30px;border-radius:50%;background:var(--raised2);color:var(--honey);
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex:none}
+.seg.done .num{background:var(--brass);color:#2a1a0e}
+.seg .body{flex:1;min-width:0}
+.seg .t{font-weight:700;font-size:15px;color:var(--pearl)}
+.seg .d{font-size:12.5px;color:var(--taupe);margin-top:2px}
+.seg .mins{color:var(--mute);font-size:12px;font-family:ui-monospace,monospace;flex:none}
+.streakrow{display:flex;gap:8px;margin-bottom:12px}
+.stat{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px;text-align:center}
+.stat .v{font-size:22px;font-weight:800;color:var(--honey);font-family:ui-monospace,monospace}
+.stat .k{font-size:11px;color:var(--taupe);margin-top:2px}
+.gate{margin-top:8px}
+.gate .lab{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
+.gate .lab b{color:var(--honey);font-family:ui-monospace,monospace}
+.bar{height:7px;background:var(--surface);border-radius:4px;overflow:hidden;border:1px solid var(--line)}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--brass),var(--ember))}
+@media (prefers-reduced-motion: reduce){*{animation:none !important;transition:none !important}}
+
+/* Overlays */
+.overlay{position:fixed;inset:0;background:rgba(20,12,7,.94);display:none;
+  align-items:center;justify-content:center;padding:22px;z-index:50}
+.overlay.on{display:flex}
+.sheet{background:var(--raised);border:1px solid var(--line);border-radius:18px;
+  padding:22px;max-width:420px;width:100%}
+.sheet h2{font-size:20px;font-weight:800;margin-bottom:8px}
+.sheet p{color:var(--taupe);font-size:14px;line-height:1.55;margin-bottom:10px}
+.sheet .pledge{color:var(--honey);font-size:13px}
+.bigmeter{font-size:40px;text-align:center;color:var(--honey);font-weight:800;margin:8px 0}
+
+/* Stats drawer */
+#stats{display:none;margin:0 12px 10px;padding:10px 12px;background:var(--surface);
+  border:1px solid var(--line);border-radius:12px;font-size:12px;color:var(--taupe);line-height:1.7}
+#stats.on{display:block}
+#stats b{color:var(--honey);font-weight:700}
+.statbtn{background:transparent;color:var(--mute);font-size:11.5px;padding:6px 10px}
+</style>
+</head>
+<body>
+
+<header>
+  <svg class="flame" viewBox="0 0 24 24"><path d="M12 2c1 3 4 4.2 4 7.8 0 1.1-.4 2-.9 2.7.9.2 1.9 1 1.9 2.9C17 18.6 14.8 21 12 21s-5-2.4-5-5.6c0-2.2 1.3-3.2 2.2-4.4C10.6 9.2 11.4 6.4 12 2z"/></svg>
+  <h1>Campfire</h1><span class="phase mono" id="phaseTag"></span>
+  <div class="spacer"></div>
+  <button id="installBtn" class="btn small ghost" style="display:none;margin-right:6px">Install</button>
+  <button id="micBtn" class="btn small">Start</button>
+</header>
+
+<div id="strip"><span class="dot"></span><span id="stripTxt" class="txt">Mic is off</span></div>
+
+<div id="stopBar" style="display:none;margin:0 12px 8px">
+  <button class="btn" id="stopBtn" style="width:100%;background:var(--surface);color:var(--pearl);border:1px solid var(--line)">Stop drill</button>
+</div>
+
+<main>
+  <!-- HOME -->
+  <section id="p-home" class="panel on">
+    <div class="streakrow">
+      <div class="stat"><div class="v" id="stStreak">0</div><div class="k">day streak</div></div>
+      <div class="stat"><div class="v" id="stToday">0/4</div><div class="k">today</div></div>
+      <div class="stat"><div class="v" id="stTier">0</div><div class="k">tier</div></div>
+    </div>
+    <div class="card">
+      <div class="h2">Today's session</div>
+      <p class="sub" id="sessSub">Twenty minutes, four parts. Tap a part to start it.</p>
+      <div id="segList" style="margin-top:14px"></div>
+    </div>
+    <div class="card">
+      <div class="h2">Your gates</div>
+      <p class="sub">Tiers unlock on measured playing, not quizzes.</p>
+      <div id="gateList" style="margin-top:12px"></div>
+    </div>
+  </section>
+
+  <!-- TUNE -->
+  <section id="p-tune" class="panel">
+    <div class="card glowcard" id="tuneCard">
+      <div class="bignote"><span class="n mono" id="noteName">—</span><span class="o mono" id="noteOct"></span></div>
+      <div class="cents" id="centsLine"><span class="v mono" id="centsVal">·</span></div>
+      <svg id="dial" viewBox="0 0 300 168">
+        <path d="M20 150 A130 130 0 0 1 280 150" fill="none" stroke="#5A4436" stroke-width="3"/>
+        <path id="zone" d="" fill="rgba(224,138,60,.22)"/>
+        <g id="ticks" stroke="#7C6553" stroke-width="2"></g>
+        <line id="needle" x1="150" y1="150" x2="150" y2="38" stroke="#E7B978" stroke-width="4" stroke-linecap="round" style="transform-origin:150px 150px;transition:transform .12s"/>
+        <circle cx="150" cy="150" r="7" fill="#D3A24E"/>
+        <text x="30" y="166" fill="#7C6553" font-size="12" class="mono">-50</text>
+        <text x="146" y="30" fill="#7C6553" font-size="12" class="mono">0</text>
+        <text x="252" y="166" fill="#7C6553" font-size="12" class="mono">+50</text>
+      </svg>
+      <div class="targetline" id="targetLine">Pluck a string</div>
+      <div class="chips" id="stringChips"></div>
+      <p class="hint" style="margin-top:10px">Tap a string to lock it, tap again for auto. Tune <b>up</b> to pitch — drop below, then come up.</p>
+    </div>
+  </section>
+
+  <!-- LAB -->
+  <section id="p-setup" class="panel">
+    <div class="chips subnav" id="setupSub"></div>
+    <div id="s-lab" class="sub on">
+    <div class="card">
+      <div class="h2">Tuning Lab</div>
+      <p class="sub">Pick a target tuning — the needle guides every string toward it.</p>
+      <div class="chips" id="presetChips"></div>
+      <div class="rows" id="presetNotes"></div>
+    </div>
+    <p class="hint">New strings drift — stretch them gently and retune a few times. Temperature changes and capos knock tuning out too; a 30-second check before practice is normal.</p>
+  </div>
+
+  <!-- CAPO -->
+  <div id="s-capo" class="sub">
+    <div class="card">
+      <div class="h2">Capo Check</div>
+      <p class="sub">Clamp the capo just behind the fret, square across the neck. Then pick each string once, thickest first.</p>
+      <div class="chips" id="capoFrets"></div>
+      <div class="chips" id="capoSlots" style="margin-top:12px"></div>
+      <div class="targetline" id="capoPrompt"></div>
+      <div class="verdict" id="capoVerdict"></div>
+      <div class="chips" style="margin-top:12px">
+        <button class="btn ghost small" id="capoReset" style="flex:1">Restart check</button>
+      </div>
+    </div>
+  </div>
+
+<div id="s-compass" class="sub">
+      <div class="card">
+        <div class="h2">Capo Compass</div>
+        <p class="sub">A capo is a transposition machine. Campfire names a key and a shape family — you work out which fret gets you there, clamp it on, and pick each string to prove it.</p>
+        <div class="chips" style="margin-top:12px">
+          <button class="btn" id="cpStart" style="flex:1">Start 6 rounds</button>
+        </div>
+      </div>
+      <div class="card glowcard" id="cpCard" style="display:none">
+        <div class="targetline mono" id="cpProg"></div>
+        <div class="big2 mono" id="cpTarget">—</div>
+        <div class="targetline" id="cpShape" style="font-size:16px;color:var(--pearl)"></div>
+        <div class="targetline" id="cpFlash" style="min-height:22px"></div>
+        <div class="chips" style="margin-top:8px">
+          <button class="btn ghost small" id="cpHint" style="flex:1">Show me the fret</button>
+        </div>
+      </div>
+      <div class="verdict" id="cpVerdict"></div>
+    </div>
+
+  <!-- INTONATION -->
+  <div id="s-into" class="sub">
+    <div class="card">
+      <div class="h2">Fret-12 Intonation Test</div>
+      <p class="sub">The 12th fret should sound exactly one octave above the open string. Pick a string, then follow the two steps. Fret lightly, fingertip just behind the fret.</p>
+      <div class="chips" id="intoStrings"></div>
+      <div class="targetline" id="intoPrompt"></div>
+      <div class="rows" id="intoRows"></div>
+      <div class="verdict" id="intoVerdict"></div>
+    </div>
+    <p class="hint">A string that reads sharp at fret 12 no matter what is an <b>instrument setup</b> issue (saddle position) — a guitar tech's five-minute fix, not your fingers' fault.</p>
+  </div>
+  </section>
+
+  <!-- DRILLS -->
+  <section id="p-drills" class="panel">
+    <div class="chips subnav" id="drillsSub"></div>
+    <div id="s-hunt" class="sub on">
+    <div class="card">
+      <div class="h2">Note Hunt</div>
+      <p class="sub">20 questions. Find the named note on the named string — the app hears your answer. Uses your current tuning.</p>
+      <div class="chips" id="huntLevels"></div>
+      <div class="chips" style="margin-top:12px">
+        <button class="btn" id="huntStart" style="flex:1">Start round</button>
+      </div>
+    </div>
+    <div class="card glowcard" id="huntCard" style="display:none">
+      <div class="targetline mono" id="huntProg"></div>
+      <div class="bignote"><span class="n mono" id="huntNote">—</span></div>
+      <div class="targetline" id="huntStr" style="font-size:16px;color:var(--pearl)"></div>
+      <div class="targetline" id="huntFlash" style="min-height:22px"></div>
+    </div>
+    <div class="verdict" id="huntVerdict"></div>
+  </div>
+
+  <!-- FRET SPRINT -->
+  <div id="s-sprint" class="sub">
+    <div class="card">
+      <div class="h2">Fret Sprint</div>
+      <p class="sub">One string, 60 seconds, as many found notes as you can. Frets 0–12. Wrong notes don't advance — accuracy is speed.</p>
+      <div class="chips" id="sprintStrings"></div>
+      <div class="chips" style="margin-top:12px">
+        <button class="btn" id="sprintStart" style="flex:1">Start 60s</button>
+      </div>
+    </div>
+    <div class="card glowcard" id="sprintCard" style="display:none">
+      <div class="targetline mono" id="sprintTime"></div>
+      <div class="bignote"><span class="n mono" id="sprintNote">—</span></div>
+      <div class="targetline" id="sprintFlash" style="min-height:22px"></div>
+      <div class="targetline mono" id="sprintScore"></div>
+    </div>
+    <div class="verdict" id="sprintVerdict"></div>
+  </div>
+
+  <div id="s-scales" class="sub">
+    <div class="card">
+      <div class="h2">Scale Runner</div>
+      <p class="sub">Play the shape one note at a time — Campfire follows along and flags a wrong note the moment it hears one. Free tempo: accuracy first, speed later.</p>
+      <div class="chips" id="scKey"></div>
+      <div class="chips" id="scType" style="margin-top:10px"></div>
+      <div class="chips" style="margin-top:12px">
+        <button class="btn" id="scStart" style="flex:1">Start</button>
+      </div>
+    </div>
+    <div class="card glowcard" id="scCard" style="display:none">
+      <div class="targetline mono" id="scProg"></div>
+      <div class="bignote"><span class="n mono" id="scNote">—</span></div>
+      <div class="targetline" id="scWhere" style="font-size:16px;color:var(--pearl)"></div>
+      <div class="targetline" id="scFlash" style="min-height:22px"></div>
+    </div>
+    <div class="verdict" id="scVerdict"></div>
+  </div>
+
+  
+
+  
+
+  <div id="s-drone" class="sub">
+    <div class="card">
+      <div class="h2">Drone Room</div>
+      <p class="sub">Same seven notes, different home. Campfire holds a root; you improvise over it. Every note you play is named live — chord tone, in-mode, the characteristic tone, or outside.</p>
+      <div class="chips" id="drRoot"></div>
+      <div class="chips" id="drMode" style="margin-top:10px"></div>
+      <div class="targetline" id="drChar" style="margin-top:8px"></div>
+      <p class="hint">Earbuds strongly recommended — otherwise the mic hears the drone. Campfire only counts notes that arrive with a fresh pluck, so it ignores its own sustained tone.</p>
+      <div class="chips" style="margin-top:10px">
+        <button class="btn" id="drStart" style="flex:1">Start drone</button>
+      </div>
+    </div>
+    <div class="card glowcard" id="drCard" style="display:none">
+      <div class="big2 mono" id="drNote">—</div>
+      <div class="targetline" id="drClass" style="font-size:17px;min-height:24px"></div>
+      <div class="gate" style="margin-top:10px">
+        <div class="lab"><span>in-mode</span><b id="drPct">—</b></div>
+        <div class="bar"><i id="drBar" style="width:0%"></i></div>
+      </div>
+      <div class="targetline mono" id="drCount" style="margin-top:8px"></div>
+    </div>
+    <div class="verdict" id="drVerdict"></div>
+  </div>
+
+  <div id="s-modes" class="sub">
+    <div class="card">
+      <div class="h2">Mode Detective</div>
+      <p class="sub">Campfire plays a phrase over a drone. You answer the only way that counts — by playing the one note that gives the mode away. Eight rounds.</p>
+      <p class="hint">The characteristic tone is the single note that separates a mode from plain major or minor. Find it and you've named the mode.</p>
+      <div class="chips" style="margin-top:10px">
+        <button class="btn" id="mdStart" style="flex:1">Start 8 rounds</button>
+      </div>
+    </div>
+    <div class="card glowcard" id="mdCard" style="display:none">
+      <div class="targetline mono" id="mdProg"></div>
+      <div class="big2 mono" id="mdState">—</div>
+      <div class="targetline" id="mdRoot" style="font-size:15px;color:var(--pearl)"></div>
+      <div class="targetline" id="mdFlash" style="min-height:22px"></div>
+      <div class="chips" style="margin-top:8px">
+        <button class="btn ghost small" id="mdReplay" style="flex:1">Play it again</button>
+      </div>
+    </div>
+    <div class="verdict" id="mdVerdict"></div>
+  </div>
+  </section>
+
+  <!-- EAR -->
+  <section id="p-ear" class="panel">
+    <div class="chips subnav" id="earSub"></div>
+    <div id="s-intervals" class="sub on">
+    <div class="card">
+      <div class="h2">Interval Echo</div>
+      <p class="sub">Campfire plays two notes. You play the second one back. Ten rounds — the drill that turns theory into an ear.</p>
+      <div class="chips" id="ivRange"></div>
+      <p class="hint" style="margin-top:8px">Earbuds help — otherwise the mic hears Campfire's own notes. It waits for silence before listening either way.</p>
+      <div class="chips" style="margin-top:10px">
+        <button class="btn" id="ivStart" style="flex:1">Start 10 rounds</button>
+      </div>
+    </div>
+    <div class="card glowcard" id="ivCard" style="display:none">
+      <div class="targetline mono" id="ivProg"></div>
+      <div class="big2 mono" id="ivState">—</div>
+      <div class="targetline" id="ivRoot" style="font-size:15px;color:var(--pearl)"></div>
+      <div class="targetline" id="ivFlash" style="min-height:22px"></div>
+      <div class="chips" style="margin-top:8px">
+        <button class="btn ghost small" id="ivReplay" style="flex:1">Play it again</button>
+      </div>
+    </div>
+    <div class="verdict" id="ivVerdict"></div>
+  </div>
+
+  <div id="s-melody" class="sub">
+    <div class="card">
+      <div class="h2">Melodic Echo</div>
+      <p class="sub">A short phrase, played back by ear. Campfire plays three to five notes from one scale shape; you find them on the neck.</p>
+      <div class="chips" id="mlLen"></div>
+      <div class="chips" style="margin-top:12px">
+        <button class="btn" id="mlStart" style="flex:1">Start 5 phrases</button>
+      </div>
+    </div>
+    <div class="card glowcard" id="mlCard" style="display:none">
+      <div class="targetline mono" id="mlProg"></div>
+      <div class="big2 mono" id="mlState">—</div>
+      <div class="targetline" id="mlFlash" style="min-height:22px"></div>
+      <div class="chips" style="margin-top:8px">
+        <button class="btn ghost small" id="mlReplay" style="flex:1">Play it again</button>
+      </div>
+    </div>
+    <div class="verdict" id="mlVerdict"></div>
+  </div>
+
+  <div id="s-quality" class="sub">
+    <div class="card">
+      <div class="h2">Quality Call</div>
+      <p class="sub">Campfire plays a chord; you answer with the single note that names it — the 3rd for major, the ♭3 for minor, the ♭5 for diminished. The third is where a chord's mood lives.</p>
+      <div class="chips" style="margin-top:12px">
+        <button class="btn" id="qcStart" style="flex:1">Start 10 rounds</button>
+      </div>
+    </div>
+    <div class="card glowcard" id="qcCard" style="display:none">
+      <div class="targetline mono" id="qcProg"></div>
+      <div class="big2 mono" id="qcState">—</div>
+      <div class="targetline" id="qcRoot" style="font-size:15px;color:var(--pearl)"></div>
+      <div class="targetline" id="qcFlash" style="min-height:22px"></div>
+      <div class="chips" style="margin-top:8px">
+        <button class="btn ghost small" id="qcReplay" style="flex:1">Play it again</button>
+      </div>
+    </div>
+    <div class="verdict" id="qcVerdict"></div>
+  </div>
+
+  <div id="s-bass" class="sub">
+    <div class="card">
+      <div class="h2">Bass Detective</div>
+      <p class="sub">Campfire plays a four-chord loop. You play back its root movement — just the bass line. Land it and the progression names itself.</p>
+      <div class="chips" style="margin-top:12px">
+        <button class="btn" id="bdStart" style="flex:1">Start 5 loops</button>
+      </div>
+    </div>
+    <div class="card glowcard" id="bdCard" style="display:none">
+      <div class="targetline mono" id="bdProg"></div>
+      <div class="big2 mono" id="bdState">—</div>
+      <div class="targetline" id="bdKey" style="font-size:15px;color:var(--pearl)"></div>
+      <div class="targetline" id="bdFlash" style="min-height:22px"></div>
+      <div class="chips" style="margin-top:8px">
+        <button class="btn ghost small" id="bdReplay" style="flex:1">Play it again</button>
+      </div>
+    </div>
+    <div class="verdict" id="bdVerdict"></div>
+  </div>
+
+  <div id="s-sing" class="sub">
+    <div class="card">
+      <div class="h2">Sing Back</div>
+      <p class="sub">Campfire plays a note; you sing it. The same detector reads a voice as easily as a string — and you can't sing a pitch you can't truly hear, which is why this builds an ear faster than anything else here.</p>
+      <p class="hint" style="margin-top:8px">Octaves don't matter — sing it wherever it sits comfortably. Tolerance is a generous ±30 cents, nothing here gates your progress, and you can switch it off again in About.</p>
+      <div class="chips" style="margin-top:12px">
+        <button class="btn" id="sgStart" style="flex:1">Start 8 notes</button>
+      </div>
+    </div>
+    <div class="card glowcard" id="sgCard" style="display:none">
+      <div class="targetline mono" id="sgProg"></div>
+      <div class="big2 mono" id="sgNote">—</div>
+      <div class="targetline" id="sgState" style="font-size:15px;color:var(--pearl)"></div>
+      <div class="targetline" id="sgFlash" style="min-height:22px"></div>
+      <div class="chips" style="margin-top:8px">
+        <button class="btn ghost small" id="sgReplay" style="flex:1">Play it again</button>
+      </div>
+    </div>
+    <div class="verdict" id="sgVerdict"></div>
+  </div>
+  </section>
+
+  <!-- GYM -->
+  <section id="p-gym" class="panel">
+    <div class="chips subnav" id="gymSub"></div>
+
+    <div id="s-beat" class="sub on">
+      <div class="card">
+        <div class="h2">Beat Keeper</div>
+        <p class="sub">Strum muted strings on every click — 4 count-in, then 16 scored hits. Earbuds keep the click out of the mic; without them, Campfire filters its own click after a Sync.</p>
+        <div class="targetline" id="syncStatus"></div>
+        <div class="chips" style="margin-top:8px">
+          <button class="btn ghost small" id="syncBtn" style="flex:1">Sync latency (10s, speaker on)</button>
+        </div>
+        <div class="cents" style="margin-top:12px;text-align:left"><span style="font-size:13px;color:var(--taupe)">Tempo </span><span class="v mono" id="beatBpmV">70</span><span style="font-size:13px;color:var(--taupe)"> BPM</span></div>
+        <input type="range" min="50" max="120" value="70" id="beatBpm" style="width:100%;accent-color:var(--brass)">
+        <div class="chips" style="margin-top:12px">
+          <button class="btn" id="beatStart" style="flex:1">Start</button>
+        </div>
+      </div>
+      <div class="card glowcard" id="beatCard" style="display:none">
+        <div class="targetline mono" id="beatProg"></div>
+        <div class="bigdelta mono" id="beatDelta">·</div>
+        <div class="lane"><div class="mid"></div><div class="mark" id="beatMark" style="display:none"></div></div>
+        <div class="targetline">left = early · right = late</div>
+      </div>
+      <div class="verdict" id="beatVerdict"></div>
+    </div>
+
+<div id="s-subdiv" class="sub">
+      <div class="card">
+        <div class="h2">Subdivider</div>
+        <p class="sub">The click stays on the beat; you fill the gaps. Strum eighths or sixteenths evenly between the clicks — this is where loose timing hides.</p>
+        <div class="chips" id="sdRate"></div>
+        <div class="cents" style="margin-top:12px;text-align:left"><span style="font-size:13px;color:var(--taupe)">Tempo </span><span class="v mono" id="sdBpmV">70</span><span style="font-size:13px;color:var(--taupe)"> BPM</span></div>
+        <input type="range" min="45" max="100" value="70" id="sdBpm" style="width:100%;accent-color:var(--brass)">
+        <div class="chips" style="margin-top:12px">
+          <button class="btn" id="sdStart" style="flex:1">Start</button>
+        </div>
+      </div>
+      <div class="card glowcard" id="sdCard" style="display:none">
+        <div class="targetline mono" id="sdProg"></div>
+        <div class="bigdelta mono" id="sdDelta">·</div>
+        <div class="lane"><div class="mid"></div><div class="mark" id="sdMark" style="display:none"></div></div>
+        <div class="targetline">left = early · right = late</div>
+      </div>
+      <div class="verdict" id="sdVerdict"></div>
+    </div>
+
+    <div id="s-spider" class="sub">
+      <div class="card">
+        <div class="h2" id="exTitle">Spider Walk</div>
+        <p class="sub" id="exBlurb"></p>
+        <div class="chips" id="exPick" style="margin-top:10px"></div>
+        <div class="chips" id="spiderPatterns" style="margin-top:10px"></div>
+        <div class="chips" id="spiderFrets" style="margin-top:10px"></div>
+        <div class="targetline mono" id="spiderLadder" style="margin-top:8px"></div>
+        <div class="chips" style="margin-top:10px">
+          <button class="btn" id="spiderStart" style="flex:1">Start at ladder tempo</button>
+          <button class="btn ghost small" id="spiderReset">Reset</button>
+        </div>
+      </div>
+      <div class="card glowcard" id="spiderCard" style="display:none">
+        <div class="targetline mono" id="spiderProg"></div>
+        <div class="bignote"><span class="n mono" id="spiderNote">—</span></div>
+        <div class="targetline" id="spiderFinger" style="font-size:16px;color:var(--pearl)"></div>
+        <div class="targetline" id="spiderFlash" style="min-height:22px"></div>
+      </div>
+      <div class="verdict" id="spiderVerdict"></div>
+    </div>
+  </section>
+
+  <!-- CHORDS -->
+  <section id="p-chords" class="panel">
+    <div class="chips subnav" id="chordsSub"></div>
+
+    <div id="s-check" class="sub on">
+      <div class="card">
+        <div class="h2">Chord Check</div>
+        <p class="sub">Arpeggio first — pick each string on its own and Campfire verifies every note, so it can tell you <i>which</i> finger is off. Pass that, and Strum mode judges the whole chord.</p>
+        <div class="chips" id="ccFamily"></div>
+        <div class="chips" id="chordPick" style="margin-top:10px"></div>
+        <div class="chips" style="margin-top:10px">
+          <button class="btn" id="ccArp" style="flex:1">Arpeggio check</button>
+          <button class="btn ghost" id="ccStrum" style="flex:1">Strum check</button>
+        </div>
+        <div class="targetline" id="ccTuneWarn" style="color:var(--ember)"></div>
+      </div>
+      <div class="card glowcard" id="ccCard" style="display:none">
+        <div class="targetline mono" id="ccMode"></div>
+        <div class="big2 mono" id="ccName">—</div>
+        <svg class="cdiag" id="ccDiag" viewBox="0 0 200 214"></svg>
+        <div class="strings6" id="ccStrings"></div>
+        <div class="targetline" id="ccFlash" style="min-height:22px"></div>
+      </div>
+      <div class="verdict" id="ccVerdict"></div>
+    </div>
+
+    <div id="s-changes" class="sub">
+      <div class="card">
+        <div class="h2">Change Counter</div>
+        <p class="sub">Sixty seconds, two chords, back and forth. Each verified change counts. This is the classic one-minute-changes drill — the fastest way to make chord shapes automatic.</p>
+        <div class="chips" id="chgA"></div>
+        <div class="targetline" style="margin:6px 0 2px">to and from</div>
+        <div class="chips" id="chgB"></div>
+        <div class="chips" style="margin-top:12px">
+          <button class="btn" id="chgStart" style="flex:1">Start 60s</button>
+        </div>
+      </div>
+      <div class="card glowcard" id="chgCard" style="display:none">
+        <div class="targetline mono" id="chgTime"></div>
+        <div class="big2 mono" id="chgNow">—</div>
+        <svg class="cdiag" id="chgDiag" viewBox="0 0 200 214"></svg>
+        <div class="targetline mono" id="chgScore"></div>
+        <div class="targetline" id="chgFlash" style="min-height:22px"></div>
+      </div>
+      <div class="verdict" id="chgVerdict"></div>
+    </div>
+
+    <div id="s-shapes" class="sub">
+      <div class="card">
+        <div class="h2">Shape Shifter</div>
+        <p class="sub">The CAGED idea: five shapes you already know, slid anywhere on the neck. Campfire names a chord — you work out where the shape lands and play it.</p>
+        <div class="chips" id="ssShapes"></div>
+        <div class="chips" style="margin-top:12px">
+          <button class="btn" id="ssStart" style="flex:1">Start 8 rounds</button>
+        </div>
+      </div>
+      <div class="card glowcard" id="ssCard" style="display:none">
+        <div class="targetline mono" id="ssProg"></div>
+        <div class="big2 mono" id="ssName">—</div>
+        <div class="targetline" id="ssShape" style="font-size:16px;color:var(--pearl)"></div>
+        <svg class="cdiag" id="ssDiag" viewBox="0 0 200 214"></svg>
+        <div class="targetline" id="ssFlash" style="min-height:22px"></div>
+        <div class="chips" style="margin-top:8px">
+          <button class="btn ghost small" id="ssHint" style="flex:1">Show me the fret</button>
+        </div>
+      </div>
+      <div class="verdict" id="ssVerdict"></div>
+    </div>
+
+    <div id="s-targets" class="sub">
+      <div class="card">
+        <div class="h2">Target Practice</div>
+        <p class="sub">Campfire loops a progression and plays each chord as it arrives. Your job: land a chord tone in every bar. Hitting the 3rd or 7th — the notes that actually spell the harmony — scores double.</p>
+        <div class="chips" id="tgProg"></div>
+        <div class="cents" style="margin-top:12px;text-align:left"><span style="font-size:13px;color:var(--taupe)">Tempo </span><span class="v mono" id="tgBpmV">70</span><span style="font-size:13px;color:var(--taupe)"> BPM</span></div>
+        <input type="range" min="50" max="110" value="70" id="tgBpm" style="width:100%;accent-color:var(--brass)">
+        <p class="hint" style="margin-top:8px">Earbuds recommended. One note per bar is plenty — this is about choosing the right note, not playing many.</p>
+        <div class="chips" style="margin-top:10px">
+          <button class="btn" id="tgStart" style="flex:1">Start loop</button>
+        </div>
+      </div>
+      <div class="card glowcard" id="tgCard" style="display:none">
+        <div class="targetline mono" id="tgProgress"></div>
+        <div class="big2 mono" id="tgChord">—</div>
+        <div class="targetline" id="tgSpell" style="font-size:14px;color:var(--taupe)"></div>
+        <div class="targetline" id="tgFlash" style="min-height:24px;font-size:16px"></div>
+        <div class="gate" style="margin-top:8px">
+          <div class="lab"><span>bars landed</span><b id="tgScore">0</b></div>
+          <div class="bar"><i id="tgBar" style="width:0%"></i></div>
+        </div>
+      </div>
+      <div class="verdict" id="tgVerdict"></div>
+    </div>
+
+    <div id="s-about" class="sub">
+      <div class="card">
+        <div class="h2">About Campfire</div>
+        <p class="sub">A guitar practice app that listens — built from classical signal processing, not AI. Everything runs on this phone: no accounts, no servers, no tracking, no network requests at all. Your audio is analysed live and never recorded or sent anywhere.</p>
+        <div class="rows" style="margin-top:12px">
+          <div class="row"><span>Build</span><span class="r mono" id="aboutBuild"></span></div>
+          <div class="row"><span>Pitch engine</span><span class="r mono">MPM (2005)</span></div>
+          <div class="row"><span>Chord engine</span><span class="r mono">Chroma (1999)</span></div>
+          <div class="row"><span>Practice records</span><span class="r mono" id="aboutRecs">—</span></div>
+        </div>
+        <div class="chips" style="margin-top:12px">
+          <button class="btn ghost small" id="expBtn" style="flex:1">Back up progress</button>
+          <button class="btn ghost small" id="impBtn" style="flex:1">Restore backup</button>
+        </div>
+        <input type="file" id="impFile" accept="application/json,.json" style="display:none">
+        <div class="rows" style="margin-top:14px">
+          <div class="row"><span>Left-handed diagrams</span>
+            <button class="btn ghost small" id="leftyBtn">off</button></div>
+          <div class="row"><span>Sing Back (voice drills)</span>
+            <button class="btn ghost small" id="singBtn">off</button></div>
+        </div>
+        <div class="chips" style="margin-top:12px">
+          <button class="btn ghost small" id="tipBtn" style="flex:1">Support the developer</button>
+        </div>
+        <p class="hint" style="margin-top:10px">Backup saves a small file of your records and personal bests. Keep it somewhere safe — reinstalling clears app storage.</p>
+      </div>
+    </div>
+  </section>
+
+  <div id="stats"></div>
+  <div style="text-align:center"><button class="statbtn" id="statsBtn">engine stats</button>
+  <button class="statbtn" id="recalBtn">recalibrate</button></div>
+</main>
+
+<nav>
+  <button data-p="home" class="on">Today</button>
+  <button data-p="tune">Tune</button>
+  <button data-p="setup">Setup</button>
+  <button data-p="drills">Drills</button>
+  <button data-p="ear">Ear</button>
+  <button data-p="gym">Gym</button>
+  <button data-p="chords">Chords</button>
+</nav>
+
+<!-- Mic primer -->
+<div class="overlay on" id="primer">
+  <div class="sheet">
+    <h2>Campfire needs its ears</h2>
+    <p>To tune your guitar and verify your capo, Campfire listens through the microphone.</p>
+    <p class="pledge">Audio is analyzed live on this phone and never recorded, stored, or sent anywhere — the app makes no network requests at all.</p>
+    <p>Chrome will ask for permission once. Play in a reasonably quiet room for best results.</p>
+    <button class="btn" id="primerBtn" style="width:100%">Start listening</button>
+    <p class="pledge mono" id="primerBuild" style="opacity:.65;text-align:center;margin-top:12px"></p>
+    <p id="primerErr" class="pledge" style="display:none;margin-top:10px;color:#E08A3C"></p>
+  </div>
+</div>
+
+<!-- Calibration -->
+<div class="overlay" id="calib">
+  <div class="sheet">
+    <h2>Room calibration</h2>
+    <p>Stay quiet for a few seconds — Campfire is measuring your room's noise floor so it knows what counts as a note.</p>
+    <div class="bigmeter mono" id="calibNum">3</div>
+    <p id="calibMsg" class="sub" style="text-align:center"></p>
+    <button class="btn ghost" id="calibRetry" style="width:100%;display:none">Try again</button>
+  </div>
+</div>
+
+<script id="dspsrc">
+/* Campfire DSP core — Phase 1
+   Pure functions, no DOM, no network. Runs identically in the browser and Node.
+   Pitch detection: McLeod Pitch Method (NSDF via FFT autocorrelation),
+   key-maxima picking with clarity, parabolic interpolation.               */
+"use strict";
+
+/* ---------- FFT (iterative radix-2, in-place, complex) ---------- */
+function makeFFT(n) {
+  const cosT = new Float64Array(n / 2), sinT = new Float64Array(n / 2);
+  for (let i = 0; i < n / 2; i++) {
+    cosT[i] = Math.cos(-2 * Math.PI * i / n);
+    sinT[i] = Math.sin(-2 * Math.PI * i / n);
+  }
+  const rev = new Uint32Array(n);
+  for (let i = 0, j = 0; i < n; i++) {
+    rev[i] = j;
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+  }
+  return function fft(re, im, inverse) {
+    for (let i = 0; i < n; i++) {
+      const r = rev[i];
+      if (r > i) {
+        let t = re[i]; re[i] = re[r]; re[r] = t;
+        t = im[i]; im[i] = im[r]; im[r] = t;
+      }
+    }
+    for (let len = 2; len <= n; len <<= 1) {
+      const half = len >> 1, step = n / len;
+      for (let i = 0; i < n; i += len) {
+        for (let j = 0; j < half; j++) {
+          const k = j * step;
+          const wr = cosT[k], wi = inverse ? -sinT[k] : sinT[k];
+          const a = i + j, b = a + half;
+          const xr = re[b], xi = im[b];
+          const tr = xr * wr - xi * wi, ti = xr * wi + xi * wr;
+          re[b] = re[a] - tr; im[b] = im[a] - ti;
+          re[a] += tr;        im[a] += ti;
+        }
+      }
+    }
+    if (inverse) for (let i = 0; i < n; i++) { re[i] /= n; im[i] /= n; }
+  };
+}
+
+/* ---------- Detector factory ---------- */
+function createDetector(opts) {
+  const sampleRate = opts.sampleRate;
+  const W    = opts.windowSize || 2048;
+  const fMin = opts.fMin || 60;
+  const fMax = opts.fMax || 1000;
+  const K    = opts.k || 0.93;           // MPM pick threshold vs highest maximum
+  const FN   = W * 2;                    // zero-padded FFT size for autocorrelation
+  const fft  = makeFFT(FN);
+  const re = new Float64Array(FN), im = new Float64Array(FN);
+  const nsdf = new Float64Array(W);
+  const prefix = new Float64Array(W + 1);
+  const tauMin = Math.max(2, Math.floor(sampleRate / fMax));
+  const tauMax = Math.min(W - 2, Math.ceil(sampleRate / fMin));
+
+  function detect(x) {
+    /* RMS (input is already high-pass filtered upstream) */
+    let sum2 = 0;
+    for (let i = 0; i < W; i++) sum2 += x[i] * x[i];
+    const rms = Math.sqrt(sum2 / W);
+    if (rms < 1e-6) return { freq: 0, clarity: 0, rms };
+
+    /* autocorrelation r(tau) via FFT: r = IFFT(|FFT(x,0-pad)|^2) */
+    for (let i = 0; i < W; i++) { re[i] = x[i]; im[i] = 0; }
+    for (let i = W; i < FN; i++) { re[i] = 0; im[i] = 0; }
+    fft(re, im, false);
+    for (let i = 0; i < FN; i++) {
+      const p = re[i] * re[i] + im[i] * im[i];
+      re[i] = p; im[i] = 0;
+    }
+    fft(re, im, true);                    // re[tau] now holds r(tau)
+
+    /* m(tau) in O(1) each via prefix sums of squares */
+    prefix[0] = 0;
+    for (let i = 0; i < W; i++) prefix[i + 1] = prefix[i] + x[i] * x[i];
+    const total = prefix[W];
+
+    for (let t = 0; t < W; t++) {
+      const m = prefix[W - t] + (total - prefix[t]);
+      nsdf[t] = m > 1e-12 ? (2 * re[t]) / m : 0;
+    }
+
+    /* key maxima between positive-going zero crossings.
+       First exit the zero-lag lobe, then collect maxima; only maxima whose
+       peak sits inside [tauMin, tauMax] become candidates.                 */
+    let bestVal = -1;
+    const maxTau = [], maxVal = [];
+    let t = 1;
+    while (t <= tauMax && nsdf[t] > 0) t++;          // skip the zero-lag lobe
+    let inRegion = false, curTau = 0, curVal = -1;
+    for (; t <= tauMax; t++) {
+      const v = nsdf[t];
+      if (!inRegion) {
+        if (v > 0) { inRegion = true; curTau = t; curVal = v; }
+      } else if (v <= 0) {
+        if (curTau >= tauMin) {
+          maxTau.push(curTau); maxVal.push(curVal);
+          if (curVal > bestVal) bestVal = curVal;
+        }
+        inRegion = false;
+      } else if (v > curVal) { curVal = v; curTau = t; }
+    }
+    if (inRegion && curTau >= tauMin) {
+      maxTau.push(curTau); maxVal.push(curVal);
+      if (curVal > bestVal) bestVal = curVal;
+    }
+    if (bestVal <= 0 || maxTau.length === 0) return { freq: 0, clarity: 0, rms };
+
+    /* first maximum above K * best — MPM's octave-error defense */
+    const thr = K * bestVal;
+    let tP = -1, vP = 0;
+    for (let i = 0; i < maxTau.length; i++) {
+      if (maxVal[i] >= thr) { tP = maxTau[i]; vP = maxVal[i]; break; }
+    }
+    if (tP < 2 || tP > W - 2) return { freq: 0, clarity: 0, rms };
+
+    /* parabolic interpolation for sub-sample lag */
+    const y1 = nsdf[tP - 1], y2 = nsdf[tP], y3 = nsdf[tP + 1];
+    const denom = (y1 - 2 * y2 + y3);
+    let shift = 0;
+    if (Math.abs(denom) > 1e-12) shift = 0.5 * (y1 - y3) / denom;
+    if (shift > 0.5) shift = 0.5; else if (shift < -0.5) shift = -0.5;
+    const period = tP + shift;
+    const freq = sampleRate / period;
+    if (freq < fMin * 0.9 || freq > fMax * 1.1) return { freq: 0, clarity: 0, rms };
+    return { freq, clarity: vP, rms };
+  }
+
+  return { detect, sampleRate, windowSize: W, tauMin, tauMax };
+}
+
+/* ---------- Note math ---------- */
+const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+
+function freqOfMidi(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+
+function noteFromFreq(f) {
+  const n = 69 + 12 * Math.log2(f / 440);
+  const midi = Math.round(n);
+  return {
+    midi,
+    cents: (n - midi) * 100,
+    name: NOTE_NAMES[((midi % 12) + 12) % 12],
+    octave: Math.floor(midi / 12) - 1,
+  };
+}
+
+function centsBetween(f, fRef) { return 1200 * Math.log2(f / fRef); }
+
+function median(arr) {
+  const a = Array.from(arr).sort((x, y) => x - y);
+  const h = a.length >> 1;
+  return a.length % 2 ? a[h] : (a[h - 1] + a[h]) / 2;
+}
+
+
+/* ---------- Onset detection (block-based, worklet-friendly) ---------- */
+function createOnsetDetector(opts) {
+  const fs = opts.sampleRate;
+  const blockSize = opts.blockSize || 128;
+  const k = opts.k || 4;                 // vs slow envelope
+  const rise = opts.rise || 2.5;         // vs previous block
+  const floorE = opts.floorE || 1e-7;
+  const refractory = opts.refractory || 0.1;
+  const decay = Math.exp(-blockSize / fs / 0.4);
+  let slow = 1e-6, prev = 1e-6, lastT = -10;
+  return {
+    feed(block, tStart) {
+      let e = 0;
+      for (let i = 0; i < block.length; i++) e += block[i] * block[i];
+      e /= block.length;
+      let onset = null;
+      const th = Math.max(k * slow, floorE);
+      if (e > th && e > rise * prev && (tStart - lastT) >= refractory) {
+        onset = { t: tStart, e };
+        lastT = tStart;
+      }
+      prev = e;
+      slow = slow * decay + e * (1 - decay);
+      return onset;
+    },
+    setFloor(f) { if (f > 0) { this && (0); } floorEUpdate(f); }
+  };
+  function floorEUpdate(f){ /* reserved for runtime floor updates */ }
+}
+
+/* ---------- Rhythm scoring ---------- */
+function scoreHits(clicks, onsets, latency, windowMs) {
+  const win = (windowMs || 150) / 1000;
+  const per = clicks.map(() => null);
+  const claimed = new Set();
+  let extras = 0;
+  for (const o of onsets) {
+    const t = o - latency;
+    let best = -1, bestAbs = 1e9;
+    for (let i = 0; i < clicks.length; i++) {
+      if (claimed.has(i)) continue;
+      const d = Math.abs(t - clicks[i]);
+      if (d < bestAbs) { bestAbs = d; best = i; }
+    }
+    if (best >= 0 && bestAbs <= win) { claimed.add(best); per[best] = (t - clicks[best]) * 1000; }
+    else extras++;
+  }
+  const hits = per.filter(d => d !== null);
+  const n = hits.length;
+  const avg = n ? hits.reduce((a, b) => a + b, 0) / n : 0;
+  const tight = n ? 100 * hits.filter(d => Math.abs(d) <= 25).length / clicks.length : 0;
+  const solid = n ? 100 * hits.filter(d => Math.abs(d) <= 60).length / clicks.length : 0;
+  return { per, extras, misses: clicks.length - n, hitPct: 100 * n / clicks.length,
+           avgMs: avg, tightPct: tight, solidPct: solid };
+}
+
+function intervalStats(times) {
+  if (times.length < 3) return { n: times.length, meanMs: 0, stdMs: 0 };
+  const iv = [];
+  for (let i = 1; i < times.length; i++) iv.push((times[i] - times[i - 1]) * 1000);
+  const mean = iv.reduce((a, b) => a + b, 0) / iv.length;
+  const varr = iv.reduce((a, b) => a + (b - mean) * (b - mean), 0) / iv.length;
+  return { n: iv.length, meanMs: mean, stdMs: Math.sqrt(varr) };
+}
+
+
+/* ---------- Chroma engine (Fujishima pitch-class profiles) ---------- */
+function createChroma(sampleRate, opts) {
+  const N = (opts && opts.fftSize) || 8192;
+  const COMP = (opts && opts.compress) || "mag";
+  const BASS_TIE = (opts && opts.bassTie) || 0.7;
+  const fLo = (opts && opts.fLo) || 70, fHi = (opts && opts.fHi) || 2200;
+  const fft = makeFFT(N);
+  const re = new Float64Array(N), im = new Float64Array(N);
+  const hann = new Float64Array(N);
+  for (let i = 0; i < N; i++) hann[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (N - 1));
+  return {
+    size: N,
+    analyze(x) {
+      for (let i = 0; i < N; i++) { re[i] = (x[i] || 0) * hann[i]; im[i] = 0; }
+      fft(re, im, false);
+      const half = N >> 1;
+      const pow = new Float64Array(half);
+      for (let k = 1; k < half; k++) pow[k] = re[k] * re[k] + im[k] * im[k];
+
+      const pcOf = f => ((Math.round(69 + 12 * Math.log2(f / 440)) % 12) + 12) % 12;
+      const kLo = Math.max(1, Math.ceil(fLo * N / sampleRate));
+      const kHi = Math.min(half - 2, Math.floor(fHi * N / sampleRate));
+
+      const val = COMP === "mag" ? (p => Math.sqrt(p))
+                : COMP === "log" ? (p => Math.log(1 + p * 1e6))
+                : (p => p);
+      const chroma = new Float64Array(12);
+      for (let k = kLo; k <= kHi; k++) chroma[pcOf(k * sampleRate / N)] += val(pow[k]);
+      let s = 0;
+      for (let i = 0; i < 12; i++) s += chroma[i] * chroma[i];
+      s = Math.sqrt(s) || 1;
+      for (let i = 0; i < 12; i++) chroma[i] /= s;
+
+      /* bass = the LOWEST significant peak, not the loudest low note.
+         If a weak fundamental hides, the next peak up is its own octave —
+         same pitch class, so the answer survives.                        */
+      const LO_M = 38, HI_M = 52;
+      const sc = new Float64Array(HI_M - LO_M + 1);
+      let bestScore = 0;
+      for (let midi = LO_M; midi <= HI_M; midi++) {
+        const f0 = 440 * Math.pow(2, (midi - 69) / 12);
+        let s2 = 0;
+        for (let h = 1; h <= 6; h++) {
+          const k = Math.round(f0 * h * N / sampleRate);
+          if (k < 2 || k >= half - 1) break;
+          const p = Math.max(pow[k - 1], pow[k], pow[k + 1]);
+          s2 += Math.sqrt(p) / h;
+        }
+        sc[midi - LO_M] = s2;
+        if (s2 > bestScore) bestScore = s2;
+      }
+      /* Bass = the lowest candidate that nearly ties the best harmonic support.
+         This is a tiebreaker hint, not ground truth: on dense four-note chords
+         it is right roughly two thirds of the time, so nothing is allowed to
+         depend on it alone. */
+      let bassPc = -1;
+      for (let midi = LO_M; midi <= HI_M; midi++) {
+        if (sc[midi - LO_M] >= BASS_TIE * bestScore) { bassPc = ((midi % 12) + 12) % 12; break; }
+      }
+      if (bassPc < 0) {
+        let bi = 0;
+        for (let i = 1; i < sc.length; i++) if (sc[i] > sc[bi]) bi = i;
+        bassPc = (((LO_M + bi) % 12) + 12) % 12;
+      }
+      return { chroma, bassPc };
+    }
+  };
+}
+
+/* ---------- Chord templates + judging ---------- */
+const CHORD_IV = { maj:[0,4,7], min:[0,3,7], dim:[0,3,6],
+                   dom7:[0,4,7,10], maj7:[0,4,7,11], min7:[0,3,7,10], m7b5:[0,3,6,10] };
+function chordTemplate(rootPc, quality) {
+  const iv = CHORD_IV[quality] || [0, 4, 7];
+  const v = new Float64Array(12);
+  for (const s of iv) {
+    const pc = (rootPc + s) % 12;
+    v[pc] += 1.0;
+    v[(pc + 7) % 12] += 0.30;   // 3rd harmonic
+    v[(pc + 4) % 12] += 0.12;   // 5th harmonic
+  }
+  let n = 0; for (let i = 0; i < 12; i++) n += v[i] * v[i];
+  n = Math.sqrt(n) || 1;
+  for (let i = 0; i < 12; i++) v[i] /= n;
+  return v;
+}
+function cosineSim(a, b) {
+  let s = 0; for (let i = 0; i < 12; i++) s += a[i] * b[i];
+  return s;
+}
+/* defs: [{name, rootPc, quality, tpl}] ; returns a verdict for the asked-for chord */
+function judgeChord(chroma, bassPc, targetIdx, defs) {
+  const t = defs[targetIdx];
+  const sims = defs.map(d => cosineSim(chroma, d.tpl));
+  let best = 0;
+  for (let i = 1; i < sims.length; i++) if (sims[i] > sims[best]) best = i;
+  const simT = sims[targetIdx];
+  let runner = -1;
+  for (let i = 0; i < sims.length; i++) if (i !== targetIdx && (runner < 0 || sims[i] > sims[runner])) runner = i;
+  const margin = simT - sims[runner];
+  const bassOK = bassPc === t.rootPc;
+
+  /* The third decides major vs minor. If the opposite third clearly wins,
+     the chord is the other quality no matter what cosine similarity says. */
+  const ivs = CHORD_IV[t.quality] || [0, 4, 7];
+  const isMin = ivs.includes(3);
+  const third    = (t.rootPc + (isMin ? 3 : 4)) % 12;
+  const oppThird = (t.rootPc + (isMin ? 4 : 3)) % 12;
+  /* Asymmetric on purpose: a root's 5th harmonic IS a major third, so minor
+     chords always carry phantom major-third energy and need a looser bar.
+     A minor third is in no harmonic series of the root, so majors stay strict. */
+  const bar = isMin ? 2.0 : 1.25;
+  if (chroma[oppThird] > chroma[third] * bar)
+    return { verdict: "wrong", best, sims, margin, reason: "third" };
+
+  /* Same logic one storey up: the 7th harmonic of the root is a flat 7th, so
+     maj7 targets sit in phantom b7 energy and need slack; dom7 targets don't. */
+  const hasMaj7 = ivs.includes(11), hasMin7 = ivs.includes(10);
+  if (hasMaj7 || hasMin7) {
+    const sev    = (t.rootPc + (hasMaj7 ? 11 : 10)) % 12;
+    const oppSev = (t.rootPc + (hasMaj7 ? 10 : 11)) % 12;
+    const bar7 = hasMaj7 ? 2.0 : 1.25;
+    if (chroma[oppSev] > chroma[sev] * bar7)
+      return { verdict: "wrong", best, sims, margin, reason: "seventh" };
+  }
+
+  if (simT < 0.55) return { verdict: "unclear", best, sims, margin };
+  if (best === targetIdx) {
+    if (margin >= 0.04 || bassOK) return { verdict: "match", best, sims, margin };
+    return { verdict: "unclear", best, sims, margin };
+  }
+  if (sims[best] - simT <= 0.03 && bassOK) return { verdict: "match", best: targetIdx, sims, margin };
+  return { verdict: "wrong", best, sims, margin };
+}
+
+/* ---------- exports (Node) / globals (browser) ---------- */
+const CampfireDSP = { makeFFT, createDetector, freqOfMidi, noteFromFreq,
+                      centsBetween, median, NOTE_NAMES,
+                      createOnsetDetector, scoreHits, intervalStats,
+                      createChroma, chordTemplate, cosineSim, judgeChord, CHORD_IV };
+if (typeof module !== "undefined" && module.exports) module.exports = CampfireDSP;
+if (typeof window !== "undefined") window.CampfireDSP = CampfireDSP;
+
+</script>
+<script>
+"use strict";
+const D = window.CampfireDSP;
+const BUILD = "phase-8.2";
+
+/* ---------------- config ---------------- */
+const CLARITY_MIN = 0.90;
+const GATE_ABS    = 0.0035;
+const STABLE_SPREAD_C = 25;
+const PRESETS = {
+  standard:{label:"Standard", midis:[40,45,50,55,59,64]},
+  dropd:   {label:"Drop D",   midis:[38,45,50,55,59,64]},
+  eb:      {label:"Eb Std",   midis:[39,44,49,54,58,63]},
+  openg:   {label:"Open G",   midis:[38,43,50,55,59,62]},
+};
+const noteLabel = m => { const n=D.noteFromFreq(D.freqOfMidi(m)); return n.name+n.octave; };
+
+/* ---------------- app state ---------------- */
+const App = {
+  ctx:null, node:null, stream:null, running:false,
+  floor: parseFloat(localStorage.getItem("cf_floor")||"0")||0,
+  preset: localStorage.getItem("cf_preset")||"standard",
+  lock:-1, mode:"tune",
+  frames:[], stable:null, stableSince:0, lastValidAt:0,
+  fpsCount:0, fps:0, lastRms:0, lastClar:0, trackInfo:"",
+  wakeLock:null,
+  capture:null, cooldownUntil:0,
+  ring:new Float32Array(8192), ringW:0, chroma:null, playUntil:0,
+  latency: parseFloat(localStorage.getItem("cf_latency")||"0")||0,
+  clickE:  parseFloat(localStorage.getItem("cf_clickE")||"0")||0,
+  lastOnsetCtx:0, lastEventMidi:null,
+  subs:{setup:"lab", drills:"hunt", ear:"intervals", gym:"beat", chords:"check"},
+};
+
+/* ---------------- helpers ---------------- */
+const $ = id => document.getElementById(id);
+const gate = () => Math.max(App.floor, GATE_ABS);
+const now = () => performance.now();
+
+/* ---------------- audio pipeline ---------------- */
+const DSP_SOURCE = document.getElementById("dspsrc").textContent;
+const WORKLET_SRC = DSP_SOURCE + `
+class Tap extends AudioWorkletProcessor{
+  constructor(){super();this.buf=new Float32Array(2048);this.w=0;this.since=0;
+    this.px=0;this.py=0;this.a=Math.exp(-2*Math.PI*40/sampleRate);this.hop=1024;
+    this.od=CampfireDSP.createOnsetDetector({sampleRate:sampleRate,blockSize:128});
+    this.blk=new Float32Array(128);}
+  process(inputs){const ch=inputs[0][0];if(!ch)return true;
+    const t0=currentTime;
+    for(let i=0;i<ch.length;i++){
+      const x=ch[i];const y=this.a*(this.py+x-this.px);this.px=x;this.py=y;
+      this.blk[i]=y;
+      this.buf[this.w]=y;this.w=(this.w+1)&2047;this.since++;
+      if(this.since>=this.hop){this.since=0;
+        const out=new Float32Array(2048);const p=this.w;
+        out.set(this.buf.subarray(p));out.set(this.buf.subarray(0,p),2048-p);
+        this.port.postMessage({type:"win",buf:out,t:currentTime},[out.buffer]);}}
+    const o=this.od.feed(this.blk.subarray(0,ch.length),t0);
+    if(o)this.port.postMessage({type:"onset",t:o.t,e:o.e});
+    return true;}}
+registerProcessor("campfire-tap",Tap);`;
+
+async function initAudio(){
+  const constraints = { audio:{ echoCancellation:false, noiseSuppression:false, autoGainControl:false } };
+  App.stream = await navigator.mediaDevices.getUserMedia(constraints);
+  const track = App.stream.getAudioTracks()[0];
+  const s = track.getSettings ? track.getSettings() : {};
+  App.trackInfo = `EC:${s.echoCancellation===false?"off":"ON?"} NS:${s.noiseSuppression===false?"off":"ON?"} AGC:${s.autoGainControl===false?"off":"ON?"}`;
+  App.ctx = new (window.AudioContext||window.webkitAudioContext)();
+  await App.ctx.resume();
+  App.det = D.createDetector({ sampleRate: App.ctx.sampleRate, fMin:60, fMax:1000 });
+  App.chroma = D.createChroma(App.ctx.sampleRate, {});
+  const src = App.ctx.createMediaStreamSource(App.stream);
+  if (App.ctx.audioWorklet){
+    const url = URL.createObjectURL(new Blob([WORKLET_SRC],{type:"application/javascript"}));
+    await App.ctx.audioWorklet.addModule(url);
+    App.node = new AudioWorkletNode(App.ctx,"campfire-tap");
+    App.node.port.onmessage = e => {
+      const m = e.data;
+      if (m.type === "onset") onOnset(m);
+      else onWindow(m.buf, m.t);
+    };
+    src.connect(App.node);
+  } else { // legacy fallback
+    const sp = App.ctx.createScriptProcessor(2048,1,1);
+    let px=0,py=0; const a=Math.exp(-2*Math.PI*40/App.ctx.sampleRate);
+    sp.onaudioprocess = e => {
+      const inp = e.inputBuffer.getChannelData(0);
+      const out = new Float32Array(2048);
+      for(let i=0;i<2048;i++){const x=inp[i];py=a*(py+x-px);px=x;out[i]=py;}
+      onWindow(out, App.ctx.currentTime);
+    };
+    src.connect(sp); sp.connect(App.ctx.destination); App.node=sp;
+  }
+  App.running = true;
+  requestWake();
+  setInterval(()=>{App.fps=App.fpsCount;App.fpsCount=0;renderStats();},1000);
+}
+
+function stopAudio(){
+  App.running=false;
+  if(App.stream) App.stream.getTracks().forEach(t=>t.stop());
+  if(App.ctx) App.ctx.close();
+  App.ctx=null; App.node=null; App.stream=null;
+  releaseWake();
+  setStrip("idle","Mic is off");
+  $("micBtn").textContent="Start";
+}
+
+/* ---------------- wake lock ---------------- */
+async function requestWake(){
+  try{ if("wakeLock" in navigator){ App.wakeLock = await navigator.wakeLock.request("screen"); } }catch(e){}
+}
+function releaseWake(){ try{ App.wakeLock && App.wakeLock.release(); }catch(e){} App.wakeLock=null; }
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible" && App.running) requestWake(); });
+
+/* ---------------- frame handling ---------------- */
+function onWindow(buf, ctxT){
+  if(!App.running) return;
+  App.fpsCount++;
+  for(let i=1024;i<2048;i++){ App.ring[App.ringW]=buf[i]; App.ringW=(App.ringW+1)&8191; }
+  const r = App.det.detect(buf);
+  App.lastRms=r.rms; App.lastClar=r.clarity;
+  if (calibrating){ calibSamples.push(r.rms); return; }
+  const valid = r.rms > gate() && r.clarity > CLARITY_MIN && r.freq > 0;
+  const t = now();
+  App.frames.push({t, f: valid ? r.freq : 0});
+  if (App.frames.length > 12) App.frames.shift();
+  if (valid) App.lastValidAt = t;
+
+  /* stability: >=5 of the last 7 frames voiced, spread <= 25 cents;
+     bridges brief dropouts during a string's natural decay             */
+  const recent = App.frames.slice(-7).filter(fr => fr.f > 0 && t - fr.t < 900);
+  let stable = null;
+  if (recent.length >= 5){
+    const fs = recent.map(fr=>fr.f);
+    const med = D.median(fs);
+    const spread = Math.max(...fs.map(f=>Math.abs(D.centsBetween(f,med))));
+    if (spread <= STABLE_SPREAD_C) stable = med;
+  }
+  if (stable){ if(!App.stable) App.stableSince = t; App.stable = stable; }
+  else if (t - App.lastValidAt > 400){ App.stable = null; }
+
+  /* note events: a new settled pitch, timestamped at its onset when recent */
+  const curMidi = (App.stable && now() >= App.playUntil) ? D.noteFromFreq(App.stable).midi : null;
+  if (curMidi !== App.lastEventMidi){
+    App.lastEventMidi = curMidi;
+    if (curMidi !== null){
+      const tEvt = (App.lastOnsetCtx && ctxT - App.lastOnsetCtx < 0.4) ? App.lastOnsetCtx : ctxT;
+      emitNoteEvent(curMidi, tEvt);
+    }
+  }
+
+  feedCapture(t);
+  render(t);
+}
+
+function ringOrdered(){
+  const out=new Float32Array(8192), p=App.ringW;
+  out.set(App.ring.subarray(p)); out.set(App.ring.subarray(0,p), 8192-p);
+  return out;
+}
+function onOnset(m){
+  App.lastOnsetCtx = m.t;
+  if (Sync.on) Sync.hits.push(m);
+  else if (Beat.on) beatOnset(m);
+  else if (Sd.on) sdOnset(m);
+  else if (Strum.armed) strumOnset(m);
+}
+function emitNoteEvent(midi, t){
+  /* the drone sustains without onsets, so a fresh pluck is required while it runs */
+  if (Drone.on && App.ctx.currentTime - App.lastOnsetCtx > 0.5) return;
+  if (Spider.on) spiderNote(midi, t);
+  else if (Seq.on) seqNote(midi, t);
+  else if (Drone.on) droneNote(midi);
+  else if (Tg.on) targetNote(midi, t);
+}
+
+/* ---------------- capture engine (capo / intonation) ---------------- */
+function armCapture(validate, onDone, onWrong){
+  App.capture = { validate, onDone, onWrong, buf:[], wrongAt:0,
+                  sawGap: !App.stable };   // must hear silence once before answering
+}
+function feedCapture(t){
+  const c = App.capture;
+  if (!c || t < App.cooldownUntil || t < App.playUntil) return;
+  if (!App.stable){ c.sawGap = true; c.buf.length=0; return; }
+  if (!c.sawGap) return;
+  const v = c.validate(App.stable);
+  if (v.ok){
+    c.buf.push(App.stable);
+    if (c.buf.length >= 5){
+      const med = D.median(c.buf);
+      App.capture = null;
+      App.cooldownUntil = t + 700;      // require a beat before the next capture
+      onCaptureDone(c, med);
+    }
+  } else {
+    c.buf.length = 0;
+    if (c.onWrong && t - c.wrongAt > 900){ c.wrongAt = t; c.onWrong(App.stable, v); }
+  }
+}
+function onCaptureDone(c, freq){ c.onDone(freq); }
+
+/* ---------------- listening strip ---------------- */
+function setStrip(state, text, good){
+  const el = $("strip");
+  el.className = state + (good ? " good" : "");
+  $("stripTxt").innerHTML = text;
+}
+
+/* ---------------- TUNER ---------------- */
+function currentMidis(){ return PRESETS[App.preset].midis; }
+function nearestTarget(f){
+  const ms = currentMidis();
+  if (App.lock >= 0) return {i:App.lock, midi:ms[App.lock]};
+  let best=0, bestAbs=1e9;
+  ms.forEach((m,i)=>{ const c=Math.abs(D.centsBetween(f, D.freqOfMidi(m))); if(c<bestAbs){bestAbs=c;best=i;} });
+  return {i:best, midi:ms[best]};
+}
+let inTuneSince = 0, wasInTune = false, dispCents = 0;
+function renderTuner(t){
+  const f = App.stable;
+  if (!f){
+    $("noteName").textContent="—"; $("noteOct").textContent="";
+    $("centsVal").textContent="·"; $("centsLine").className="cents";
+    $("targetLine").textContent = App.lock>=0 ? `Locked: string ${6-App.lock} → ${noteLabel(currentMidis()[App.lock])}` : "Pluck a string";
+    $("needle").style.transform="rotate(0deg)";
+    $("tuneCard").classList.remove("good");
+    inTuneSince=0; wasInTune=false; dispCents=0;
+    return;
+  }
+  const n = D.noteFromFreq(f);
+  const tgt = nearestTarget(f);
+  const cents = D.centsBetween(f, D.freqOfMidi(tgt.midi));
+  dispCents += 0.3 * (cents - dispCents);          // smoothed needle
+  $("noteName").textContent = n.name; $("noteOct").textContent = n.octave;
+  const cl = Math.max(-50, Math.min(50, dispCents));
+  $("needle").style.transform = `rotate(${cl*1.5}deg)`;
+  $("centsVal").textContent = (dispCents>=0?"+":"") + dispCents.toFixed(0) + " cents";
+  $("targetLine").textContent = `target ${noteLabel(tgt.midi)} · string ${6-tgt.i}${App.lock>=0?" (locked)":""}`;
+  /* hysteresis: enter at ±5, only leave past ±8 */
+  const limit = wasInTune ? 8 : 5;
+  const good = Math.abs(dispCents) <= limit;
+  wasInTune = good;
+  if (good && !inTuneSince) inTuneSince = t;
+  if (!good) inTuneSince = 0;
+  const held = good && (t - inTuneSince > 400);
+  $("centsLine").className = "cents" + (held ? " good":"");
+  $("tuneCard").classList.toggle("good", held);
+  if (held) $("centsVal").textContent = "In tune ✓";
+}
+function buildStringChips(){
+  const box = $("stringChips"); box.innerHTML="";
+  currentMidis().forEach((m,i)=>{
+    const b=document.createElement("button");
+    b.className="chip"+(App.lock===i?" on":"");
+    b.innerHTML=`<span class="mono">${noteLabel(m)}</span><span class="lab">str ${6-i}</span>`;
+    b.onclick=()=>{ App.lock = (App.lock===i? -1 : i); buildStringChips(); };
+    box.appendChild(b);
+  });
+}
+
+/* ---------------- LAB ---------------- */
+function buildLab(){
+  const box=$("presetChips"); box.innerHTML="";
+  Object.entries(PRESETS).forEach(([k,p])=>{
+    const b=document.createElement("button");
+    b.className="chip"+(App.preset===k?" on":"");
+    b.textContent=p.label;
+    b.onclick=()=>{ App.preset=k; localStorage.setItem("cf_preset",k); App.lock=-1;
+      buildLab(); buildStringChips(); resetCapo(); resetInto();
+      buildHuntLevels(); buildSprintStrings();
+buildSubnav("setup"); buildSubnav("drills"); buildSubnav("gym"); buildSubnav("chords");
+buildChordPick(); buildChgPicks(); buildScaleUI(); buildIvUI(); buildMlUI();
+buildSSUI(); buildDroneUI(); buildTgUI(); buildSdUI();
+buildSubnav("ear"); refreshAbout(); refreshHome();
+buildSpiderUI(); syncStatusLine(); };
+    box.appendChild(b);
+  });
+  const rows=$("presetNotes"); rows.innerHTML="";
+  const r=document.createElement("div"); r.className="row";
+  r.innerHTML=`<span>Strings 6 → 1</span><span class="r mono">${currentMidis().map(noteLabel).join("  ")}</span>`;
+  rows.appendChild(r);
+}
+
+/* ---------------- CAPO CHECK ---------------- */
+const Capo = { fret:2, idx:0, results:[] };
+function buildCapoFrets(){
+  const box=$("capoFrets"); box.innerHTML="";
+  for(let f=1; f<=7; f++){
+    const b=document.createElement("button");
+    b.className="chip small"+(Capo.fret===f?" on":"");
+    b.textContent="fret "+f;
+    b.onclick=()=>{ Capo.fret=f; resetCapo(); };
+    box.appendChild(b);
+  }
+}
+function buildCapoSlots(){
+  const box=$("capoSlots"); box.innerHTML="";
+  currentMidis().forEach((m,i)=>{
+    const b=document.createElement("button");
+    const res=Capo.results[i];
+    b.className="chip"+(i===Capo.idx && res===undefined ?" on":"")+(res!==undefined?" done":"");
+    b.disabled=true;
+    b.innerHTML = res!==undefined
+      ? `<span class="mono">${(res>=0?"+":"")}${res.toFixed(0)}c</span><span class="lab">str ${6-i}</span>`
+      : `<span class="mono">${noteLabel(m+Capo.fret)}</span><span class="lab">str ${6-i}</span>`;
+    box.appendChild(b);
+  });
+}
+function resetCapo(){
+  Capo.idx=0; Capo.results=[];
+  $("capoVerdict").className="verdict";
+  buildCapoFrets(); buildCapoSlots(); armCapoStep();
+}
+function armCapoStep(){
+  if (!(App.mode==="setup" && App.subs.setup==="capo")) return;
+  if (Capo.idx>=6){ capoVerdict(); return; }
+  const openM = currentMidis()[Capo.idx];
+  const expectM = openM + Capo.fret;
+  $("capoPrompt").textContent = `Pick string ${6-Capo.idx} — expecting ${noteLabel(expectM)}`;
+  armCapture(
+    f => ({ ok: Math.abs(D.centsBetween(f, D.freqOfMidi(expectM))) <= 60 }),
+    f => {
+      Capo.results[Capo.idx] = D.centsBetween(f, D.freqOfMidi(expectM));
+      Capo.idx++; buildCapoSlots(); armCapoStep();
+    },
+    f => {
+      const heard = D.noteFromFreq(f);
+      const offWhole = D.centsBetween(f, D.freqOfMidi(expectM));
+      let extra = "";
+      if (Math.abs(offWhole-100)<45) extra = " — sounds a fret high, check the capo fret";
+      else if (Math.abs(offWhole+100)<45) extra = " — sounds a fret low, check the capo fret";
+      $("capoPrompt").textContent = `Hearing ${heard.name}${heard.octave}, expecting ${noteLabel(expectM)}${extra}`;
+    }
+  );
+}
+function capoVerdict(){
+  $("capoPrompt").textContent = "";
+  const r = Capo.results, mx=Math.max(...r), mn=Math.min(...r);
+  const avg = r.reduce((a,b)=>a+b,0)/6;
+  const el = $("capoVerdict");
+  let good=false, msg;
+  if (Math.max(...r.map(Math.abs)) <= 8){ good=true;
+    msg = `<b>Seated well ✓</b> Every string within ±8 cents of perfect. Play on.`; }
+  else if (mx - mn > 25){
+    msg = `<b>Uneven pressure.</b> Strings differ by ${(mx-mn).toFixed(0)} cents across the neck. Reseat the capo square, directly behind the fret.`; }
+  else if (avg >= 8){
+    msg = `<b>Pulling sharp</b> by about ${avg.toFixed(0)} cents on average — classic spring-capo squeeze. Reseat closer to the fret with lighter pressure, then re-check.`; }
+  else if (avg <= -8){
+    msg = `<b>Reading flat.</b> That usually means the open tuning drifted — pop the capo off, retune on the Tune tab, and run the check again.`; }
+  else {
+    const worst = r.map((c,i)=>({c,i})).sort((a,b)=>Math.abs(b.c)-Math.abs(a.c))[0];
+    msg = `<b>Close.</b> String ${6-worst.i} is ${(worst.c>=0?"+":"")}${worst.c.toFixed(0)} cents out — nudge the capo or that string and re-check.`; }
+  el.innerHTML = msg;
+  el.className = "verdict on" + (good?" good":"");
+}
+
+/* ---------------- INTONATION ---------------- */
+const Into = { str:0, step:0, fOpen:0, results:{} };
+function buildIntoStrings(){
+  const box=$("intoStrings"); box.innerHTML="";
+  currentMidis().forEach((m,i)=>{
+    const b=document.createElement("button");
+    b.className="chip"+(Into.str===i?" on":"");
+    b.innerHTML=`<span class="mono">${noteLabel(m)}</span><span class="lab">str ${6-i}</span>`;
+    b.onclick=()=>{ Into.str=i; Into.step=0; buildIntoStrings(); armIntoStep(); };
+    box.appendChild(b);
+  });
+}
+function resetInto(){ Into.str=0; Into.step=0; Into.results={}; $("intoRows").innerHTML="";
+  $("intoVerdict").className="verdict"; buildIntoStrings(); armIntoStep(); }
+function armIntoStep(){
+  if (!(App.mode==="setup" && App.subs.setup==="into")) return;
+  const openM = currentMidis()[Into.str];
+  if (Into.step===0){
+    $("intoPrompt").textContent = `Step 1 — pluck string ${6-Into.str} OPEN (${noteLabel(openM)}), let it ring`;
+    armCapture(
+      f => ({ ok: Math.abs(D.centsBetween(f, D.freqOfMidi(openM))) <= 60 }),
+      f => { Into.fOpen=f; Into.step=1; armIntoStep(); },
+      f => { const h=D.noteFromFreq(f);
+        $("intoPrompt").textContent=`Hearing ${h.name}${h.octave} — expecting open ${noteLabel(openM)}. Tune first if needed.`; }
+    );
+  } else {
+    $("intoPrompt").textContent = `Step 2 — now fret the SAME string at fret 12 and pluck`;
+    armCapture(
+      f => ({ ok: Math.abs(D.centsBetween(f, 2*Into.fOpen)) <= 60 }),
+      f => {
+        const dev = D.centsBetween(f, Into.fOpen) - 1200;
+        Into.results[Into.str]=dev; Into.step=0; renderIntoRows(); intoVerdict(dev);
+      },
+      f => { const h=D.noteFromFreq(f);
+        $("intoPrompt").textContent=`Hearing ${h.name}${h.octave} — expecting the octave at fret 12.`; }
+    );
+  }
+}
+function renderIntoRows(){
+  const rows=$("intoRows"); rows.innerHTML="";
+  Object.entries(Into.results).forEach(([i,dev])=>{
+    const r=document.createElement("div"); r.className="row";
+    r.innerHTML=`<span>String ${6-i}</span><span class="r mono">${dev>=0?"+":""}${dev.toFixed(1)} cents at fret 12</span>`;
+    rows.appendChild(r);
+  });
+}
+function intoVerdict(dev){
+  const el=$("intoVerdict"); const a=Math.abs(dev); let good=false, msg;
+  if (a<=3){ good=true; msg=`<b>Spot on ✓</b> This string's intonation is fine.`; }
+  else if (a<=8){ msg=`<b>Slightly ${dev>0?"sharp":"flat"} (${dev.toFixed(1)}c).</b> Try again fretting as lightly as possible, fingertip right behind the fret — finger pressure alone can cause this much.`; }
+  else { msg=`<b>${dev>0?"Sharp":"Flat"} by ${dev.toFixed(1)} cents.</b> If this repeats with light fretting and fresh tuning, the saddle needs adjusting — a quick, cheap job for a guitar tech. Not your fingers' fault.`; }
+  el.innerHTML=msg; el.className="verdict on"+(good?" good":"");
+}
+
+/* ---------------- storage (schema-versioned) ---------------- */
+const Store = {
+  data: null,
+  load(){
+    try{ this.data = JSON.parse(localStorage.getItem("cf_store")||"null"); }catch(e){ this.data=null; }
+    if (!this.data || this.data.v !== 1) this.data = { v:1, records:[], prs:{} };
+  },
+  save(){ try{ localStorage.setItem("cf_store", JSON.stringify(this.data)); }catch(e){} },
+  record(r){ this.data.records.push(Object.assign({at:Date.now()}, r));
+    if (this.data.records.length > 200) this.data.records.shift(); this.save(); },
+  pr(key, val, higherIsBetter=true){
+    const cur = this.data.prs[key];
+    const better = cur===undefined || (higherIsBetter ? val>cur : val<cur);
+    if (better){ this.data.prs[key]=val; this.save(); }
+    return better;
+  },
+  best(key){ return this.data.prs[key]; },
+};
+Store.load();
+
+/* ---------------- haptics ---------------- */
+const buzz = p => { try{ navigator.vibrate && navigator.vibrate(p); }catch(e){} };
+const tickCorrect = () => buzz(25);
+const tickPass    = () => buzz([30,60,30]);
+
+/* ---------------- NOTE HUNT ---------------- */
+const Hunt = { lvl:"open", on:false, qi:0, score:0, t0:0, q:null, order:[] };
+const HUNT_LEVELS = { open:{label:"Open strings",max:0}, f5:{label:"Frets 0–5",max:5}, f12:{label:"Frets 0–12",max:12} };
+function buildHuntLevels(){
+  const box=$("huntLevels"); box.innerHTML="";
+  Object.entries(HUNT_LEVELS).forEach(([k,l])=>{
+    const b=document.createElement("button");
+    b.className="chip"+(Hunt.lvl===k?" on":"");
+    b.textContent=l.label;
+    b.onclick=()=>{ if(Hunt.on) return; Hunt.lvl=k; buildHuntLevels(); };
+    box.appendChild(b);
+  });
+}
+function huntGen(){
+  const ms = currentMidis(), max = HUNT_LEVELS[Hunt.lvl].max;
+  const qs=[]; let lastMidi=-1;
+  while (qs.length<20){
+    const s=Math.floor(Math.random()*6), fr=Math.floor(Math.random()*(max+1));
+    const m=ms[s]+fr;
+    if (m===lastMidi) continue;
+    qs.push({str:s, fret:fr, midi:m}); lastMidi=m;
+  }
+  return qs;
+}
+function startHunt(){
+  if(!App.running){ flashEl("huntFlash","Tap Start (top right) to open the mic first"); return; }
+  Hunt.on=true; Hunt.qi=0; Hunt.score=0; Hunt.order=huntGen(); Hunt.t0=now();
+  $("huntCard").style.display="block"; $("huntVerdict").className="verdict";
+  nextHuntQ();
+}
+function nextHuntQ(){
+  if (Hunt.qi>=20){ endHunt(); return; }
+  Hunt.q = Hunt.order[Hunt.qi];
+  $("huntProg").textContent = `${Hunt.qi+1} / 20`;
+  $("huntNote").textContent = noteLabel(Hunt.q.midi);
+  $("huntStr").textContent  = `on string ${6-Hunt.q.str}`;
+  $("huntFlash").textContent = "";
+  armCapture(
+    () => ({ok:true}),                       // any settled note is an answer
+    f => {
+      const got = D.noteFromFreq(f).midi;
+      if (got === Hunt.q.midi){
+        Hunt.score++; tickCorrect();
+        flashEl("huntFlash","✓", true);
+        Hunt.qi++; setTimeout(nextHuntQ, 500);
+      } else {
+        const h = D.noteFromFreq(f);
+        flashEl("huntFlash",`✗ that was ${h.name}${h.octave} — fret ${Hunt.q.fret} is the spot`);
+        Hunt.qi++; setTimeout(nextHuntQ, 1200);
+      }
+    }
+  );
+}
+function endHunt(){
+  Hunt.on=false;
+  const secs=(now()-Hunt.t0)/1000;
+  const key=`hunt_${Hunt.lvl}`;
+  const isPR=Store.pr(key, Hunt.score);
+  Store.record({d:"hunt", lvl:Hunt.lvl, score:Hunt.score, total:20, secs:Math.round(secs)});
+  const gate90 = Hunt.score>=18;
+  if (gate90) tickPass();
+  const el=$("huntVerdict");
+  el.innerHTML = `<b>${Hunt.score} / 20</b> in ${secs.toFixed(0)}s.`+
+    (isPR?` New best for ${HUNT_LEVELS[Hunt.lvl].label}.`:` Best: ${Store.best(key)}/20.`)+
+    (gate90?` <b>Tier gate standard reached ✓</b>`:` The Tier 1 gate is 18/20 in under 2 minutes — keep hunting.`);
+  el.className="verdict on"+(gate90?" good":"");
+  $("huntCard").style.display="none";
+  refreshHome();
+}
+$("huntStart").onclick=startHunt;
+
+/* ---------------- FRET SPRINT ---------------- */
+const Sprint = { str:0, on:false, score:0, endT:0, q:null, timer:null };
+function buildSprintStrings(){
+  const box=$("sprintStrings"); box.innerHTML="";
+  currentMidis().forEach((m,i)=>{
+    const b=document.createElement("button");
+    b.className="chip"+(Sprint.str===i?" on":"");
+    b.innerHTML=`<span class="mono">${noteLabel(m)}</span><span class="lab">str ${6-i}</span>`;
+    b.onclick=()=>{ if(Sprint.on) return; Sprint.str=i; buildSprintStrings(); };
+    box.appendChild(b);
+  });
+}
+function sprintNextQ(){
+  const base=currentMidis()[Sprint.str];
+  let fr;
+  do { fr=Math.floor(Math.random()*13); } while (Sprint.q && base+fr===Sprint.q.midi);
+  Sprint.q={fret:fr, midi:base+fr};
+  $("sprintNote").textContent=noteLabel(Sprint.q.midi);
+  $("sprintFlash").textContent="";
+  armCapture(
+    () => ({ok:true}),
+    f => {
+      const got=D.noteFromFreq(f).midi;
+      if (got===Sprint.q.midi){
+        Sprint.score++; tickCorrect();
+        $("sprintScore").textContent=`found: ${Sprint.score}`;
+        flashEl("sprintFlash","✓",true);
+        if (Sprint.on) sprintNextQ();
+      } else {
+        const h=D.noteFromFreq(f);
+        flashEl("sprintFlash",`✗ ${h.name}${h.octave} — same prompt, try again`);
+        if (Sprint.on) armSprintRetry();
+      }
+    }
+  );
+}
+function armSprintRetry(){ // same question, re-arm
+  const q=Sprint.q;
+  armCapture(()=>({ok:true}), f=>{
+    const got=D.noteFromFreq(f).midi;
+    if (got===q.midi){ Sprint.score++; tickCorrect();
+      $("sprintScore").textContent=`found: ${Sprint.score}`;
+      flashEl("sprintFlash","✓",true);
+      if (Sprint.on) sprintNextQ();
+    } else { const h=D.noteFromFreq(f);
+      flashEl("sprintFlash",`✗ ${h.name}${h.octave} — still hunting fret ${q.fret}`);
+      if (Sprint.on) armSprintRetry(); }
+  });
+}
+function startSprint(){
+  if(!App.running){ flashEl("sprintFlash","Tap Start (top right) to open the mic first"); return; }
+  Sprint.on=true; Sprint.score=0; Sprint.q=null; Sprint.endT=now()+60000;
+  $("sprintCard").style.display="block"; $("sprintVerdict").className="verdict";
+  $("sprintScore").textContent="found: 0";
+  Sprint.timer=setInterval(()=>{
+    const left=Math.max(0,(Sprint.endT-now())/1000);
+    $("sprintTime").textContent=left.toFixed(0)+"s";
+    if(left<=0) endSprint();
+  },250);
+  sprintNextQ();
+}
+function endSprint(){
+  clearInterval(Sprint.timer); Sprint.on=false; App.capture=null;
+  const key=`sprint_${App.preset}_${Sprint.str}`;
+  const isPR=Store.pr(key, Sprint.score);
+  Store.record({d:"sprint", str:Sprint.str, score:Sprint.score, preset:App.preset});
+  if (isPR && Sprint.score>0) tickPass();
+  const el=$("sprintVerdict");
+  el.innerHTML=`<b>${Sprint.score} notes per minute</b> on string ${6-Sprint.str}.`+
+    (isPR?` New personal record.`:` Best on this string: ${Store.best(key)}.`);
+  el.className="verdict on"+(isPR&&Sprint.score>0?" good":"");
+  $("sprintCard").style.display="none";
+  refreshHome();
+}
+$("sprintStart").onclick=startSprint;
+
+/* ---------------- metronome (lookahead scheduler) ---------------- */
+const Met = { timer:null, sched:[], idx:0 };
+function clickAt(t, down){
+  const o=App.ctx.createOscillator(), g=App.ctx.createGain();
+  o.type="square"; o.frequency.value = down?1568:1046;
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(down?0.5:0.32, t+0.002);
+  g.gain.exponentialRampToValueAtTime(0.0001, t+0.03);
+  o.connect(g).connect(App.ctx.destination);
+  o.start(t); o.stop(t+0.05);
+}
+function metRun(times, downEvery){
+  Met.sched=times; Met.idx=0;
+  clearInterval(Met.timer);
+  Met.timer=setInterval(()=>{
+    const horizon=App.ctx.currentTime+0.15;
+    while(Met.idx<Met.sched.length && Met.sched[Met.idx]<horizon){
+      clickAt(Met.sched[Met.idx], downEvery ? (Met.idx%downEvery===0) : false);
+      Met.idx++;
+    }
+    if(Met.idx>=Met.sched.length){ clearInterval(Met.timer); Met.timer=null; }
+  },25);
+}
+function metStop(){ clearInterval(Met.timer); Met.timer=null; Met.sched=[]; }
+
+/* ---------------- latency sync (acoustic -> tap fallback -> estimate) ---------------- */
+const Sync = { on:false, phase:null, hits:[], clicks:[], burst:null };
+function syncStatusLine(){
+  const srcTag = localStorage.getItem("cf_syncsrc");
+  if (App.latency){
+    const label = srcTag==="tap" ? "tap method" : (srcTag==="est" ? "estimated" : "heard itself");
+    $("syncStatus").innerHTML = `Synced (${label}): <b>${(App.latency*1000).toFixed(0)} ms</b> ✓`;
+  } else {
+    $("syncStatus").textContent = "Run Sync once before Beat Keeper — phone speaker on, no Bluetooth.";
+  }
+}
+function applyL(L, srcTag){
+  App.latency=L;
+  localStorage.setItem("cf_latency", String(L));
+  localStorage.setItem("cf_syncsrc", srcTag);
+  syncStatusLine();
+}
+function burstAt(t){                     // broadband burst: survives speakers, mics, and AEC better
+  if(!Sync.burst){
+    const n=Math.round(App.ctx.sampleRate*0.09);
+    const b=App.ctx.createBuffer(1,n,App.ctx.sampleRate);
+    const d=b.getChannelData(0);
+    for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*(1-i/n);
+    Sync.burst=b;
+  }
+  const s=App.ctx.createBufferSource(); s.buffer=Sync.burst;
+  const g=App.ctx.createGain(); g.gain.value=0.85;
+  s.connect(g).connect(App.ctx.destination); s.start(t);
+}
+function runSync(){
+  if(!App.running){ $("syncStatus").textContent="Open the mic first (Start, top right)."; return; }
+  Sync.on=true; Sync.phase="acoustic"; Sync.hits=[];
+  const t0=App.ctx.currentTime+0.4;
+  Sync.clicks=[]; for(let k=0;k<8;k++) Sync.clicks.push(t0+k*0.7);
+  Sync.clicks.forEach(burstAt);
+  $("syncStatus").textContent="Syncing — hold still, media volume up…";
+  setTimeout(finishAcoustic, (8*0.7+0.9)*1000);
+}
+function matchSync(lo, hi){
+  const ds=[], es=[];
+  for(const c of Sync.clicks){
+    let best=null;
+    for(const o of Sync.hits){
+      const d=o.t-c;
+      if(d>lo && d<hi && (best===null || Math.abs(d)<Math.abs(best.d))) best={d,e:o.e};
+    }
+    if(best){ ds.push(best.d); es.push(best.e); }
+  }
+  return {ds, es};
+}
+function finishAcoustic(){
+  const {ds, es} = matchSync(0.005, 0.45);
+  if(ds.length>=4){
+    Sync.on=false;
+    App.clickE=D.median(es);
+    localStorage.setItem("cf_clickE", String(App.clickE));
+    applyL(D.median(ds), "heard");
+    return;
+  }
+  /* Plan B: the player is the wire */
+  Sync.phase="tap"; Sync.hits=[];
+  const t0=App.ctx.currentTime+1.2;
+  Sync.clicks=[]; for(let k=0;k<8;k++) Sync.clicks.push(t0+k*0.75);
+  metRun(Sync.clicks, 0);
+  $("syncStatus").innerHTML="<b>Plan B:</b> strum muted strings exactly ON each click — 8 clicks…";
+  setTimeout(finishTap, (1.2+8*0.75+0.9)*1000);
+}
+function finishTap(){
+  Sync.on=false;
+  const {ds} = matchSync(-0.2, 0.35);
+  if(ds.length>=6){
+    const sorted=[...ds].sort((a,b)=>a-b);
+    const iqr=sorted[Math.floor(sorted.length*0.75)]-sorted[Math.floor(sorted.length*0.25)];
+    if(iqr<0.08){ applyL(D.median(ds), "tap"); return; }
+    $("syncStatus").textContent="Taps too scattered — once more, relaxed, right on the click.";
+    return;
+  }
+  /* last resort: estimate from the audio stack itself */
+  const est=(App.ctx.outputLatency||0)+(App.ctx.baseLatency||0)+0.03;
+  applyL(est, "est");
+  $("syncStatus").innerHTML=`Estimated <b>${(est*1000).toFixed(0)} ms</b> from the audio stack — usable, but retry Sync sometime for a real measurement.`;
+}
+$("syncBtn").onclick=runSync;
+
+/* ---------------- BEAT KEEPER ---------------- */
+const Beat = { on:false, all:[], scored:[], hits:[], count:0, endTimer:null };
+$("beatBpm").oninput = e => $("beatBpmV").textContent = e.target.value;
+function startBeat(){
+  if(!App.running){ $("syncStatus").textContent="Open the mic first (Start, top right)."; return; }
+  if(!App.latency){ $("syncStatus").textContent="Run Sync first — one time, ten seconds."; return; }
+  const bpm=+$("beatBpm").value, per=60/bpm;
+  const t0=App.ctx.currentTime+0.5;
+  Beat.all=[]; for(let k=0;k<20;k++) Beat.all.push(t0+k*per);
+  Beat.scored=Beat.all.slice(4);
+  Beat.hits=[]; Beat.count=0; Beat.on=true;
+  $("beatCard").style.display="block"; $("beatVerdict").className="verdict";
+  $("beatProg").textContent="count-in…"; $("beatDelta").textContent="·";
+  $("beatMark").style.display="none";
+  metRun(Beat.all, 4);
+  Beat.endTimer=setTimeout(endBeat, (20*per+0.6)*1000);
+}
+function beatOnset(o){
+  if(!Beat.on) return;
+  if(App.clickE){                       // ignore our own click's bleed
+    for(const c of Beat.all){
+      if(Math.abs(o.t-(c+App.latency))<0.03 && o.e<4*App.clickE) return;
+    }
+  }
+  Beat.hits.push(o.t);
+  const tU=o.t-App.latency;
+  let best=null;
+  for(const c of Beat.scored){ const d=(tU-c)*1000; if(best===null||Math.abs(d)<Math.abs(best)) best=d; }
+  if(best!==null && Math.abs(best)<=150){
+    Beat.count++;
+    $("beatProg").textContent=`hit ${Math.min(Beat.count,16)} / 16`;
+    const band=Math.abs(best)<=25?"tight":(Math.abs(best)<=60?"solid":(best<0?"early":"late"));
+    $("beatDelta").textContent=`${best>=0?"+":""}${best.toFixed(0)} ms · ${band}`;
+    $("beatDelta").style.color=Math.abs(best)<=25?"var(--ember)":(Math.abs(best)<=60?"var(--honey)":"var(--taupe)");
+    if(Math.abs(best)<=25) tickCorrect();
+    const mk=$("beatMark"); mk.style.display="block";
+    mk.style.left=(50+Math.max(-45,Math.min(45,best*0.45)))+"%";
+  }
+}
+function endBeat(){
+  if(!Beat.on) return;
+  Beat.on=false; metStop(); clearTimeout(Beat.endTimer);
+  const r=D.scoreHits(Beat.scored,Beat.hits,App.latency,150);
+  const bpm=+$("beatBpm").value;
+  const isPR=Store.pr(`beat_${bpm}`, r.tightPct);
+  Store.pr(`beatsolid_${bpm}`, r.solidPct);
+  Store.record({d:"beat",bpm,tight:Math.round(r.tightPct),solid:Math.round(r.solidPct),miss:r.misses,avg:Math.round(r.avgMs)});
+  const tend=r.avgMs>8?"you tend to drag":(r.avgMs<-8?"you tend to rush":"dead centered");
+  const good=r.solidPct>=80;
+  if(good) tickPass();
+  $("beatVerdict").innerHTML=`<b>${Math.round(r.tightPct)}% tight · ${Math.round(r.solidPct)}% solid</b> · ${r.misses} missed · avg ${r.avgMs>=0?"+":""}${r.avgMs.toFixed(0)} ms — ${tend}.`+
+    (isPR?" New best at this tempo.":"")+
+    (good?" <b>Tier 2 gate standard ✓</b>":" The Tier 2 gate: 80% within ±60 ms at 70 BPM.");
+  $("beatVerdict").className="verdict on"+(good?" good":"");
+  $("beatCard").style.display="none";
+  refreshHome();
+}
+$("beatStart").onclick=startBeat;
+
+/* ---------------- EXERCISE ENGINE (data-driven Gym) ----------------
+   Every drill is a sequence builder. Adding an exercise = adding data.
+   Patterns and shapes below come from standard technique literature:
+   one-finger-per-fret chromatics, diagonal spiders, string skipping,
+   and legato (hammer-on / pull-off) work.                              */
+const SPATTERNS = { "1234":[1,2,3,4], "4321":[4,3,2,1], "1324":[1,3,2,4], "4231":[4,2,3,1],
+                    "1342":[1,3,4,2], "2413":[2,4,1,3], "1432":[1,4,3,2], "3142":[3,1,4,2] };
+const EXERCISES = {
+  spider:{ label:"Spider Walk", usesPattern:true,
+    blurb:"One finger per fret, one note per click, across all six strings. The permutations stop your fingers moving in habitual pairs.",
+    build:(fret,pat)=>{ const ms=currentMidis(), p=SPATTERNS[pat], out=[];
+      for(let s=0;s<6;s++) for(const k of p)
+        out.push({midi:ms[s]+fret+(k-1), finger:k, str:6-s, fret:fret+k-1, tech:"pick"});
+      return out; } },
+  diagonal:{ label:"Diagonal", usesPattern:false,
+    blurb:"Each string moves up one fret as you cross — index low, pinky high, then back. Breaks the habit of leaning on the strong fingers.",
+    build:(fret)=>{ const ms=currentMidis(), out=[];
+      const step=s=>({f:s%4, k:(s%4)+1});
+      for(let s=0;s<6;s++){ const {f,k}=step(s); out.push({midi:ms[s]+fret+f, finger:k, str:6-s, fret:fret+f, tech:"pick"}); }
+      for(let s=4;s>=0;s--){ const {f,k}=step(s); out.push({midi:ms[s]+fret+f, finger:k, str:6-s, fret:fret+f, tech:"pick"}); }
+      return out; } },
+  skipper:{ label:"String Skip", usesPattern:true,
+    blurb:"The same fingering, but jumping over strings — the accuracy test your picking hand can't fake.",
+    build:(fret,pat)=>{ const ms=currentMidis(), p=SPATTERNS[pat], out=[];
+      for(const s of [0,2,4,1,3,5]) for(const k of p)
+        out.push({midi:ms[s]+fret+(k-1), finger:k, str:6-s, fret:fret+k-1, tech:"pick"});
+      return out; } },
+  legato:{ label:"Legato", usesPattern:false,
+    blurb:"Pick once, then hammer on and pull off — fretting-hand strength on its own. Only the first note of each group is picked.",
+    build:(fret)=>{ const ms=currentMidis(), out=[];
+      for(let s=0;s<6;s++){
+        out.push({midi:ms[s]+fret,   finger:1, str:6-s, fret:fret,   tech:"pick"});
+        out.push({midi:ms[s]+fret+2, finger:3, str:6-s, fret:fret+2, tech:"hammer"});
+        out.push({midi:ms[s]+fret,   finger:1, str:6-s, fret:fret,   tech:"pull"});
+      }
+      return out; } },
+};
+const EXIDS=Object.keys(EXERCISES);
+const Spider = { ex:"spider", pat:"1234", fret:1, on:false, i:0, seq:[], times:[], wrong:0, bpm:60, endTimer:null };
+const ladderKey = () => `ladder_${Spider.ex}_${EXERCISES[Spider.ex].usesPattern?Spider.pat:"-"}_f${Spider.fret}`;
+const ladderNext = () => (Store.best(ladderKey())||56)+4;
+function buildSpiderUI(){
+  const ex=EXERCISES[Spider.ex];
+  $("exTitle").textContent=ex.label;
+  $("exBlurb").textContent=ex.blurb;
+  const xb=$("exPick"); xb.innerHTML="";
+  EXIDS.forEach(id=>{
+    const b=document.createElement("button");
+    b.className="chip small"+(Spider.ex===id?" on":"");
+    b.textContent=EXERCISES[id].label;
+    b.onclick=()=>{ if(Spider.on) return; Spider.ex=id; buildSpiderUI(); };
+    xb.appendChild(b);
+  });
+  const pb=$("spiderPatterns"); pb.innerHTML="";
+  if(ex.usesPattern){
+    Object.keys(SPATTERNS).forEach(p=>{
+      const b=document.createElement("button");
+      b.className="chip small mono"+(Spider.pat===p?" on":"");
+      b.textContent=p;
+      b.onclick=()=>{ if(Spider.on) return; Spider.pat=p; buildSpiderUI(); };
+      pb.appendChild(b);
+    });
+  }
+  const fb=$("spiderFrets"); fb.innerHTML="";
+  [1,5,7].forEach(f=>{
+    const b=document.createElement("button");
+    b.className="chip"+(Spider.fret===f?" on":"");
+    b.innerHTML=`frets ${f}–${f+3}`;
+    b.onclick=()=>{ if(Spider.on) return; Spider.fret=f; buildSpiderUI(); };
+    fb.appendChild(b);
+  });
+  const best=Store.best(ladderKey());
+  $("spiderLadder").textContent = best
+    ? `ladder: ${ladderNext()} BPM (best clean pass: ${best})`
+    : `ladder starts at 60 BPM`;
+}
+function startSpider(){
+  if(!App.running){ flashEl("spiderFlash","Open the mic first (Start, top right)"); return; }
+  const ex=EXERCISES[Spider.ex];
+  Spider.seq=ex.build(Spider.fret, Spider.pat);
+  Spider.bpm=ladderNext();
+  const per=60/Spider.bpm;
+  Spider.i=0; Spider.times=[]; Spider.wrong=0; Spider.on=true;
+  $("spiderCard").style.display="block"; $("spiderVerdict").className="verdict";
+  const t0=App.ctx.currentTime+0.5;
+  const clicks=[]; for(let k=0;k<Spider.seq.length+4;k++) clicks.push(t0+k*per);
+  metRun(clicks, 4);
+  promptSpider();
+  Spider.endTimer=setTimeout(()=>endSpider(), ((Spider.seq.length+4)*per+1.8)*1000);
+}
+function promptSpider(){
+  const n=Spider.seq[Spider.i];
+  const techWord = n.tech==="hammer"?"hammer on":(n.tech==="pull"?"pull off":"pick");
+  $("spiderProg").textContent=`${Spider.i+1} / ${Spider.seq.length} · ${Spider.bpm} BPM`;
+  $("spiderNote").textContent=noteLabel(n.midi);
+  $("spiderFinger").textContent=`${techWord} · finger ${n.finger} · fret ${n.fret} · string ${n.str}`;
+  $("spiderFlash").textContent="";
+}
+function spiderNote(midi, t){
+  if(!Spider.on) return;
+  if(midi===Spider.seq[Spider.i].midi){
+    Spider.times.push(t); Spider.i++;
+    flashEl("spiderFlash","✓",true);
+    if(Spider.i>=Spider.seq.length) endSpider();
+    else promptSpider();
+  } else {
+    Spider.wrong++;
+    const h=D.noteFromFreq(D.freqOfMidi(midi));
+    flashEl("spiderFlash",`✗ ${h.name}${h.octave}`);
+  }
+}
+function endSpider(){
+  if(!Spider.on) return;
+  Spider.on=false; metStop(); clearTimeout(Spider.endTimer);
+  const per=60/Spider.bpm*1000;
+  const st=D.intervalStats(Spider.times);
+  const total=Spider.seq.length;
+  const complete=Spider.i>=total;
+  const evenOK = st.stdMs<=Math.max(25, 0.12*per);
+  const tempoOK = Math.abs(st.meanMs-per)<=0.12*per;
+  const pass = complete && Spider.wrong===0 && evenOK && tempoOK;
+  Store.record({d:"gym", ex:Spider.ex, pat:Spider.pat, fret:Spider.fret, bpm:Spider.bpm,
+    done:Spider.i, wrong:Spider.wrong, std:Math.round(st.stdMs)});
+  const el=$("spiderVerdict");
+  if(pass){
+    Store.pr(ladderKey(), Spider.bpm); tickPass();
+    el.innerHTML=`<b>Clean at ${Spider.bpm} BPM ✓</b> Evenness ±${st.stdMs.toFixed(0)} ms. The ladder rises — next run at <b>${Spider.bpm+4} BPM</b>.`;
+  } else {
+    const why=[];
+    if(!complete) why.push(`stopped at ${Spider.i}/${total}`);
+    if(Spider.wrong) why.push(`${Spider.wrong} wrong note${Spider.wrong>1?"s":""}`);
+    if(complete && !evenOK) why.push(`uneven: ±${st.stdMs.toFixed(0)} ms between notes`);
+    if(complete && !tempoOK) why.push(`drifted off tempo (avg ${st.meanMs.toFixed(0)} ms vs ${per.toFixed(0)})`);
+    el.innerHTML=`<b>Not yet at ${Spider.bpm} BPM.</b> ${why.join(" · ")}. Same rung next time — slow is smooth.`;
+  }
+  el.className="verdict on"+(pass?" good":"");
+  $("spiderCard").style.display="none";
+  buildSpiderUI(); refreshHome();
+}
+$("spiderStart").onclick=startSpider;
+$("spiderReset").onclick=()=>{ if(Spider.on) return;
+  delete Store.data.prs[ladderKey()]; Store.save(); buildSpiderUI(); };
+
+/* ---------------- TODAY'S SESSION ----------------
+   Opens on a plan, not a menu. Segments are generated from progress
+   and rotate daily; tapping one jumps straight into that drill.      */
+const DAY = () => Math.floor(Date.now()/86400000);
+function dayStamp(ts){ return new Date(ts).toDateString(); }
+function recordsToday(){ const t=new Date().toDateString();
+  return Store.data.records.filter(r=>dayStamp(r.at)===t); }
+function streakDays(){
+  const days=new Set(Store.data.records.map(r=>dayStamp(r.at)));
+  let n=0; const d=new Date();
+  if(!days.has(d.toDateString())) d.setDate(d.getDate()-1);
+  while(days.has(d.toDateString())){ n++; d.setDate(d.getDate()-1); }
+  return n;
+}
+const GATES=[
+  {id:"hunt", label:"Tier 1 — Note Hunt", target:18, unit:"/20",
+   get:()=>Math.max(Store.best("hunt_open")||0, Store.best("hunt_f5")||0, Store.best("hunt_f12")||0)},
+  {id:"beat", label:"Tier 2 — Beat Keeper", target:80, unit:"% solid",
+   get:()=>{ let b=0; Object.keys(Store.data.prs).forEach(k=>{ if(k.startsWith("beatsolid_")) b=Math.max(b,Store.data.prs[k]); }); return Math.round(b); }},
+  {id:"chg",  label:"Tier 5 — Changes/min", target:30, unit:"",
+   get:()=>{ let b=0; Object.keys(Store.data.prs).forEach(k=>{ if(k.startsWith("chg_")) b=Math.max(b,Store.data.prs[k]); }); return b; }},
+];
+function currentTier(){
+  let t=0;
+  if(GATES[0].get()>=GATES[0].target) t=1;
+  if(t===1 && GATES[1].get()>=GATES[1].target) t=2;
+  if(t===2 && GATES[2].get()>=GATES[2].target) t=5;
+  return t;
+}
+function buildSession(){
+  const d=DAY(), tier=currentTier();
+  const warm=EXIDS[d%EXIDS.length];
+  const segs=[
+    {t:"Warm up — "+EXERCISES[warm].label, d:"Gym · fingers awake before anything else", m:3,
+     go:["gym","spider"], match:r=>r.d==="gym", pre:()=>{Spider.ex=warm; buildSpiderUI();}},
+  ];
+  if(tier<1) segs.push({t:"Note Hunt", d:"Find named notes by playing them", m:6, go:["drills","hunt"], match:r=>r.d==="hunt"});
+  else segs.push({t:d%2? "Fret Sprint":"Note Hunt", d:"Fretboard recall under mild pressure", m:6,
+     go:["drills", d%2?"sprint":"hunt"], match:r=>r.d===(d%2?"sprint":"hunt")});
+  if(tier>=1){
+    const ear=[["Interval Echo","intervals","interval","Play back what you hear"],
+               ["Quality Call","quality","quality","Major, minor or diminished — by ear"],
+               ["Melodic Echo","melody","melody","Short phrases, found on the neck"],
+               ["Bass Detective","bass","bassline","Follow the roots of a progression"]][d%4];
+    segs.push({t:"Ear — "+ear[0], d:ear[3], m:5, go:["ear",ear[1]], match:r=>r.d===ear[2]});
+  }
+  if(tier>=2) segs.push({t:"Chord Check", d:"Arpeggio, then strum — clean shapes", m:6, go:["chords","check"], match:r=>r.d==="chordarp"});
+  else segs.push({t:"Beat Keeper", d:"Strum on the click, learn your rush or drag", m:6, go:["gym","beat"], match:r=>r.d==="beat"});
+  if(tier>=5) segs.push({t:"Target Practice", d:"Land chord tones through a ii–V–I", m:5, go:["chords","targets"], match:r=>r.d==="target"});
+  else segs.push({t:"Finish — Change Counter", d:"One minute of chord changes", m:5, go:["chords","changes"], match:r=>r.d==="changes"});
+  return segs;
+}
+let SESSION=[];
+function refreshHome(){
+  SESSION=buildSession();
+  const today=recordsToday();
+  let done=0;
+  const box=$("segList"); box.innerHTML="";
+  SESSION.forEach((s,i)=>{
+    const isDone=today.some(s.match);
+    if(isDone) done++;
+    const b=document.createElement("button");
+    b.className="seg"+(isDone?" done":"");
+    b.innerHTML=`<span class="num">${isDone?"✓":i+1}</span>
+      <span class="body"><span class="t">${s.t}</span><span class="d">${s.d}</span></span>
+      <span class="mins">${s.m}m</span>`;
+    b.onclick=()=>{ if(s.pre) s.pre(); goTo(s.go[0], s.go[1]); };
+    box.appendChild(b);
+  });
+  $("stStreak").textContent=streakDays();
+  $("stToday").textContent=done+"/"+SESSION.length;
+  $("stTier").textContent=currentTier();
+  $("sessSub").textContent = done>=SESSION.length
+    ? "Session complete — nicely done. Anything more today is a bonus."
+    : "Twenty minutes, four parts. Tap a part to start it.";
+  const gl=$("gateList"); gl.innerHTML="";
+  GATES.forEach(g=>{
+    const v=g.get(), pct=Math.min(100, Math.round(100*v/g.target));
+    const div=document.createElement("div");
+    div.className="gate";
+    div.innerHTML=`<div class="lab"><span>${g.label}</span><b>${v}${g.unit} / ${g.target}${g.unit}</b></div>
+      <div class="bar"><i style="width:${pct}%"></i></div>`;
+    gl.appendChild(div);
+  });
+}
+function goTo(group, sub){
+  const btn=document.querySelector(`nav button[data-p="${group}"]`);
+  if(btn) btn.click();
+  if(sub) setSub(group, sub);
+}
+
+/* ---------------- Karplus-Strong voice ----------------
+   The app's own guitar: fill a delay line with noise, loop it through a
+   gentle averaging filter, and a plucked string comes out. 1983, no samples. */
+const KS = { cache:{} };
+function ksBuffer(midi){
+  if (KS.cache[midi]) return KS.cache[midi];
+  const sr=App.ctx.sampleRate, dur=1.5, n=Math.round(sr*dur);
+  const buf=App.ctx.createBuffer(1,n,sr);
+  const out=buf.getChannelData(0);
+  const f=D.freqOfMidi(midi), N=Math.max(2,Math.round(sr/f));
+  const d=new Float32Array(N);
+  for(let i=0;i<N;i++) d[i]=Math.random()*2-1;
+  let idx=0, prev=d[N-1];
+  for(let i=0;i<n;i++){
+    const cur=d[idx];
+    out[i]=cur*0.45;
+    d[idx]=0.9965*0.5*(cur+prev);
+    prev=cur; idx=(idx+1)%N;
+  }
+  const fade=Math.round(sr*0.12);
+  for(let i=0;i<fade;i++) out[n-1-i]*= i/fade;
+  KS.cache[midi]=buf; return buf;
+}
+function playNote(midi, atCtx){
+  const s=App.ctx.createBufferSource(); s.buffer=ksBuffer(midi);
+  const g=App.ctx.createGain(); g.gain.value=0.9;
+  s.connect(g).connect(App.ctx.destination);
+  s.start(atCtx);
+}
+/* play a list of midis, gap seconds apart; resolve when the room is quiet again */
+function playPhrase(midis, gap, done){
+  const t0=App.ctx.currentTime+0.15;
+  midis.forEach((m,i)=>playNote(m, t0+i*gap));
+  const endsIn=(0.15+midis.length*gap+0.45)*1000;
+  App.playUntil = now()+endsIn;
+  App.lastEventMidi=null;
+  setTimeout(()=>{ App.lastEventMidi=null; if(done) done(); }, endsIn);
+}
+
+/* ---------------- generic sequence tracker ---------------- */
+const Seq={on:false, list:[], i:0, onStep:null, onDone:null, onWrong:null, times:[], pcMode:false};
+function seqStart(list, hooks){
+  Seq.on=true; Seq.list=list; Seq.i=0; Seq.times=[];
+  Object.assign(Seq, {onStep:hooks.step, onDone:hooks.done, onWrong:hooks.wrong});
+  if(Seq.onStep) Seq.onStep(Seq.list[0], 0);
+}
+function seqStop(){ Seq.on=false; Seq.list=[]; }
+function seqNote(midi, t){
+  if(!Seq.on) return;
+  const hit = Seq.pcMode ? ((midi-Seq.list[Seq.i])%12+12)%12===0 : midi===Seq.list[Seq.i];
+  if(hit){
+    Seq.times.push(t); Seq.i++;
+    if(Seq.i>=Seq.list.length){ Seq.on=false; if(Seq.onDone) Seq.onDone(Seq.times); }
+    else if(Seq.onStep) Seq.onStep(Seq.list[Seq.i], Seq.i);
+  } else if(Seq.onWrong) Seq.onWrong(midi);
+}
+
+/* ---------------- SCALE RUNNER ----------------
+   Shapes are stored as [string, fretOffset] pairs so any root works. */
+const SCALES = {
+  major:{label:"Major", cells:[[0,0],[0,2],[0,4],[1,0],[1,2],[1,4],[2,1],[2,2]]},
+  minor:{label:"Natural minor", cells:[[0,0],[0,2],[0,3],[1,0],[1,2],[1,3],[2,0],[2,2]]},
+  pentmin:{label:"Pentatonic minor", cells:[[0,0],[0,3],[1,0],[1,2],[2,0],[2,2]]},
+  pentmaj:{label:"Pentatonic major", cells:[[0,0],[0,2],[0,4],[1,2],[1,4],[2,2]]},
+};
+const SKEYS=[["E",0],["F",1],["G",3],["A",5],["C",8],["D",10]];
+const Sc={key:0, type:"major", on:false, t0:0, wrong:0, seq:[]};
+function buildScaleUI(){
+  const kb=$("scKey"); kb.innerHTML="";
+  SKEYS.forEach(([n,f],i)=>{
+    const b=document.createElement("button");
+    b.className="chip small mono"+(Sc.key===i?" on":"");
+    b.textContent=n;
+    b.onclick=()=>{ if(Sc.on) return; Sc.key=i; buildScaleUI(); };
+    kb.appendChild(b);
+  });
+  const tb=$("scType"); tb.innerHTML="";
+  Object.entries(SCALES).forEach(([k,v])=>{
+    const b=document.createElement("button");
+    b.className="chip small"+(Sc.type===k?" on":"");
+    b.textContent=v.label;
+    b.onclick=()=>{ if(Sc.on) return; Sc.type=k; buildScaleUI(); };
+    tb.appendChild(b);
+  });
+}
+function scaleCells(){
+  const ms=currentMidis(), F=SKEYS[Sc.key][1];
+  return SCALES[Sc.type].cells.map(([s,off])=>({
+    midi:ms[s]+F+off, str:6-s, fret:F+off }));
+}
+function startScale(){
+  if(!App.running){ flashEl("scFlash","Open the mic first (Start, top right)"); return; }
+  Sc.on=true; Sc.wrong=0; Sc.t0=now();
+  const cells=scaleCells();
+  const up=cells.slice(), down=cells.slice(0,-1).reverse();
+  Sc.seq=up.concat(down);
+  $("scCard").style.display="block"; $("scVerdict").className="verdict";
+  seqStart(Sc.seq.map(c=>c.midi), {
+    step:(m,i)=>{ const c=Sc.seq[i];
+      $("scProg").textContent=`${i+1} / ${Sc.seq.length}${i<cells.length?" · up":" · down"}`;
+      $("scNote").textContent=noteLabel(c.midi);
+      $("scWhere").textContent=`string ${c.str} · fret ${c.fret}`;
+      $("scFlash").textContent=""; },
+    wrong:(m)=>{ Sc.wrong++; const h=D.noteFromFreq(D.freqOfMidi(m));
+      flashEl("scFlash",`✗ ${h.name}${h.octave} — keep going, find the one on screen`); },
+    done:()=>endScale()
+  });
+}
+function endScale(){
+  Sc.on=false; seqStop();
+  const secs=(now()-Sc.t0)/1000;
+  const key=`scale_${Sc.type}_${SKEYS[Sc.key][0]}`;
+  const clean=Sc.wrong===0;
+  if(clean) Store.pr(key, Math.round(secs), false);
+  Store.record({d:"scale", type:Sc.type, key:SKEYS[Sc.key][0], secs:Math.round(secs), wrong:Sc.wrong});
+  if(clean) tickPass();
+  const best=Store.best(key);
+  $("scVerdict").innerHTML = clean
+    ? `<b>${SKEYS[Sc.key][0]} ${SCALES[Sc.type].label} clean ✓</b> ${secs.toFixed(0)}s${best?` · best ${best}s`:""}. Now try it without looking at the fret numbers.`
+    : `<b>Finished with ${Sc.wrong} wrong note${Sc.wrong>1?"s":""}</b> in ${secs.toFixed(0)}s. Slow down — the shape sticks faster when it's clean.`;
+  $("scVerdict").className="verdict on"+(clean?" good":"");
+  $("scCard").style.display="none"; refreshHome();
+}
+$("scStart").onclick=startScale;
+
+/* ---------------- INTERVAL ECHO ---------------- */
+const IVNAMES={0:"unison",1:"minor 2nd",2:"major 2nd",3:"minor 3rd",4:"major 3rd",5:"perfect 4th",
+  6:"tritone",7:"perfect 5th",8:"minor 6th",9:"major 6th",10:"minor 7th",11:"major 7th",12:"octave"};
+const IVCUES={1:"the Jaws theme",2:"Happy Birthday",3:"Greensleeves",4:"Oh When the Saints",
+  5:"Here Comes the Bride",7:"Twinkle Twinkle",9:"the NBC chimes",12:"Somewhere Over the Rainbow"};
+const IVSETS={easy:[4,5,7,12], all:[1,2,3,4,5,7,9,12]};
+const Iv={set:"easy", on:false, n:0, score:0, root:0, iv:0};
+function buildIvUI(){
+  const b=$("ivRange"); b.innerHTML="";
+  [["easy","3rds · 4ths · 5ths · octave"],["all","all common intervals"]].forEach(([k,l])=>{
+    const x=document.createElement("button");
+    x.className="chip small"+(Iv.set===k?" on":"");
+    x.textContent=l;
+    x.onclick=()=>{ if(Iv.on) return; Iv.set=k; buildIvUI(); };
+    b.appendChild(x);
+  });
+}
+function startIv(){
+  if(!App.running){ flashEl("ivFlash","Open the mic first (Start, top right)"); return; }
+  Iv.on=true; Iv.n=0; Iv.score=0;
+  $("ivCard").style.display="block"; $("ivVerdict").className="verdict";
+  nextIv();
+}
+function nextIv(){
+  if(Iv.n>=10){ endIv(); return; }
+  const ms=currentMidis();
+  const opts=IVSETS[Iv.set];
+  Iv.iv=opts[Math.floor(Math.random()*opts.length)];
+  const s=Math.floor(Math.random()*3)+1;         // strings 5,4,3 keep it in easy reach
+  const fret=Math.floor(Math.random()*4);
+  Iv.root=ms[s]+fret;
+  $("ivProg").textContent=`${Iv.n+1} / 10`;
+  $("ivRoot").textContent=`root: ${noteLabel(Iv.root)} — string ${6-s}, fret ${fret}`;
+  playIv();
+}
+function playIv(){
+  $("ivState").textContent="listen…";
+  $("ivFlash").textContent="";
+  playPhrase([Iv.root, Iv.root+Iv.iv], 0.85, ()=>{
+    $("ivState").textContent="your turn";
+    flashEl("ivFlash","play the second note");
+    armCapture(()=>({ok:true}), f=>{
+      const got=D.noteFromFreq(f).midi;
+      const right=got===Iv.root+Iv.iv;
+      if(right){ Iv.score++; tickCorrect(); }
+      const cue=IVCUES[Iv.iv]?` — think ${IVCUES[Iv.iv]}`:"";
+      flashEl("ivFlash", right?`✓ ${IVNAMES[Iv.iv]}${cue}`:`✗ that was ${D.noteFromFreq(f).name} — it was a ${IVNAMES[Iv.iv]}${cue}`, right);
+      Iv.n++;
+      setTimeout(()=>{ if(Iv.on) nextIv(); }, right?900:1700);
+    });
+  });
+}
+function endIv(){
+  Iv.on=false; App.capture=null;
+  const key=`iv_${Iv.set}`;
+  const isPR=Store.pr(key, Iv.score);
+  Store.record({d:"interval", set:Iv.set, score:Iv.score});
+  const gate=Iv.score>=8;
+  if(gate) tickPass();
+  $("ivVerdict").innerHTML=`<b>${Iv.score} / 10</b> intervals echoed back.`+
+    (isPR?" New best.":` Best: ${Store.best(key)}/10.`)+
+    (gate?" <b>Tier 4 gate standard ✓</b>":" The Tier 4 gate is 8 of 10.");
+  $("ivVerdict").className="verdict on"+(gate?" good":"");
+  $("ivCard").style.display="none"; refreshHome();
+}
+$("ivStart").onclick=startIv;
+$("ivReplay").onclick=()=>{ if(Iv.on){ App.capture=null; playIv(); } };
+
+/* ---------------- MELODIC ECHO ---------------- */
+const Ml={len:3, on:false, n:0, score:0, phrase:[]};
+function buildMlUI(){
+  const b=$("mlLen"); b.innerHTML="";
+  [3,4,5].forEach(n=>{
+    const x=document.createElement("button");
+    x.className="chip"+(Ml.len===n?" on":"");
+    x.textContent=n+" notes";
+    x.onclick=()=>{ if(Ml.on) return; Ml.len=n; buildMlUI(); };
+    b.appendChild(x);
+  });
+}
+function startMl(){
+  if(!App.running){ flashEl("mlFlash","Open the mic first (Start, top right)"); return; }
+  Ml.on=true; Ml.n=0; Ml.score=0;
+  $("mlCard").style.display="block"; $("mlVerdict").className="verdict";
+  nextMl();
+}
+function nextMl(){
+  if(Ml.n>=5){ endMl(); return; }
+  const pool=scaleCells().map(c=>c.midi);
+  Ml.phrase=[];
+  for(let i=0;i<Ml.len;i++){
+    let m; do { m=pool[Math.floor(Math.random()*pool.length)]; } while(m===Ml.phrase[Ml.phrase.length-1]);
+    Ml.phrase.push(m);
+  }
+  $("mlProg").textContent=`${Ml.n+1} / 5 · ${SKEYS[Sc.key][0]} ${SCALES[Sc.type].label}`;
+  playMl();
+}
+function playMl(){
+  seqStop();
+  $("mlState").textContent="listen…"; $("mlFlash").textContent="";
+  playPhrase(Ml.phrase, 0.7, ()=>{
+    $("mlState").textContent="your turn";
+    flashEl("mlFlash","play it back");
+    let missed=false;
+    seqStart(Ml.phrase.slice(), {
+      step:(m,i)=>{ $("mlState").textContent=`note ${i+1} of ${Ml.phrase.length}`; },
+      wrong:()=>{ missed=true; flashEl("mlFlash","not that one — listen again or keep hunting"); },
+      done:()=>{
+        if(!missed){ Ml.score++; tickCorrect(); }
+        flashEl("mlFlash", missed?"got there in the end":"✓ note-perfect", !missed);
+        Ml.n++;
+        setTimeout(()=>{ if(Ml.on) nextMl(); }, 1100);
+      }
+    });
+  });
+}
+function endMl(){
+  Ml.on=false; seqStop();
+  const key=`mel_${Ml.len}`;
+  const isPR=Store.pr(key, Ml.score);
+  Store.record({d:"melody", len:Ml.len, score:Ml.score});
+  if(Ml.score>=4) tickPass();
+  $("mlVerdict").innerHTML=`<b>${Ml.score} / 5</b> phrases played back first time.`+
+    (isPR?" New best.":` Best: ${Store.best(key)}/5.`)+
+    ` Phrases come from the scale you picked in Scale Runner — change it there for new colours.`;
+  $("mlVerdict").className="verdict on"+(Ml.score>=4?" good":"");
+  $("mlCard").style.display="none"; refreshHome();
+}
+$("mlStart").onclick=startMl;
+$("mlReplay").onclick=()=>{ if(Ml.on) playMl(); };
+
+/* ---------------- TARGET PRACTICE (chord-tone soloing) ----------------
+   The app loops a progression and plays each chord. The first note you play
+   in each bar is checked against that chord: root/5th counts, 3rd or 7th —
+   the guide tones that actually spell the harmony — counts double.        */
+const PROGS={
+  ii5_C:{label:"ii–V–I in C", bars:["Dm7","G7","Cmaj7","Cmaj7"]},
+  ii5_G:{label:"ii–V–I in G", bars:["Am7","D7","Gmaj7","Gmaj7"]},
+  ii5_D:{label:"ii–V–I in D", bars:["Em7","A7","Dmaj7","Dmaj7"]},
+  blues:{label:"12-bar blues in A", bars:["A7","A7","A7","A7","D7","D7","A7","A7","E7","D7","A7","E7"]},
+};
+const PGIDS=Object.keys(PROGS);
+const Tg={prog:"ii5_C", on:false, loops:2, bars:[], i:-1, scored:[], pts:0, hits:0, endTimer:null};
+function buildTgUI(){
+  const b=$("tgProg"); b.innerHTML="";
+  PGIDS.forEach(id=>{
+    const x=document.createElement("button");
+    x.className="chip small"+(Tg.prog===id?" on":"");
+    x.textContent=PROGS[id].label;
+    x.onclick=()=>{ if(Tg.on) return; Tg.prog=id; buildTgUI(); };
+    b.appendChild(x);
+  });
+}
+$("tgBpm").oninput=e=>$("tgBpmV").textContent=e.target.value;
+function startTg(){
+  if(!App.running){ flashEl("tgFlash","Open the mic first (Start, top right)"); return; }
+  const bpm=+$("tgBpm").value, beat=60/bpm, bar=beat*4;
+  const seq=[]; for(let l=0;l<Tg.loops;l++) seq.push(...PROGS[Tg.prog].bars);
+  const t0=App.ctx.currentTime+0.6;
+  Tg.bars=seq.map((name,i)=>({name, t:t0+i*bar}));
+  Tg.on=true; Tg.i=-1; Tg.scored=seq.map(()=>0); Tg.pts=0; Tg.hits=0;
+  $("tgCard").style.display="block"; $("tgVerdict").className="verdict";
+  $("tgScore").textContent="0"; $("tgBar").style.width="0%";
+  const clicks=[]; for(let k=0;k<seq.length*4;k++) clicks.push(t0+k*beat);
+  metRun(clicks, 4);
+  Tg.bars.forEach((b,i)=>{
+    const ms=chordMidis(b.name).filter(m=>m!==null);
+    ms.forEach((m,j)=>playNote(m, b.t+j*0.022));
+    setTimeout(()=>{ if(Tg.on) showTgBar(i); }, (b.t-App.ctx.currentTime)*1000);
+  });
+  Tg.endTimer=setTimeout(endTg, (seq.length*bar+1.2)*1000);
+}
+function showTgBar(i){
+  Tg.i=i;
+  const c=CHORDLIB[Tg.bars[i].name];
+  $("tgProgress").textContent=`bar ${i+1} / ${Tg.bars.length}`;
+  $("tgChord").textContent=Tg.bars[i].name;
+  $("tgSpell").textContent=c.spell;
+  $("tgFlash").textContent="";
+}
+function targetNote(midi, t){
+  if(!Tg.on || Tg.i<0) return;
+  const i=Tg.i;
+  if(Tg.scored[i]) return;
+  const bar=Tg.bars[i];
+  if(t < bar.t+0.28) return;                 // let the app's own stab clear
+  const c=CHORDLIB[bar.name];
+  const ivs=D.CHORD_IV[c.q]||[0,4,7];
+  const deg=((midi-c.root)%12+12)%12;
+  const n=D.noteFromFreq(D.freqOfMidi(midi));
+  if(ivs.includes(deg)){
+    const guide = deg===3||deg===4||deg===10||deg===11;
+    Tg.scored[i]=guide?2:1; Tg.pts+=Tg.scored[i]; Tg.hits++;
+    tickCorrect();
+    const nm = deg===0?"the root":(deg===3||deg===4)?"the 3rd":(deg===7)?"the 5th":(deg===6)?"the b5":"the 7th";
+    flashEl("tgFlash", guide?`★ ${n.name} — ${nm}, a guide tone`:`✓ ${n.name} — ${nm}`, true);
+  } else {
+    Tg.scored[i]=-1;
+    flashEl("tgFlash",`${n.name} is outside ${bar.name} — try a chord tone next bar`);
+  }
+  $("tgScore").textContent=String(Tg.pts);
+  $("tgBar").style.width=Math.min(100,Math.round(100*Tg.pts/(2*Tg.bars.length)))+"%";
+}
+function endTg(){
+  if(!Tg.on) return;
+  Tg.on=false; metStop(); clearTimeout(Tg.endTimer);
+  const total=Tg.bars.length;
+  const pct=Math.round(100*Tg.hits/total);
+  const key=`target_${Tg.prog}`;
+  const isPR=Store.pr(key, Tg.pts);
+  Store.record({d:"target", prog:Tg.prog, pts:Tg.pts, hits:Tg.hits, bars:total});
+  const gate=pct>=75;
+  if(gate) tickPass();
+  $("tgVerdict").innerHTML=`<b>${Tg.hits} of ${total} bars landed</b> (${pct}%) for ${Tg.pts} points.`+
+    (isPR?" New best.":` Best: ${Store.best(key)} points.`)+
+    (gate?" <b>Tier 8 standard ✓</b> That's improvising with intent, not hoping."
+        :" Aim for the 3rd and 7th — they're what make a chord sound like itself.");
+  $("tgVerdict").className="verdict on"+(gate?" good":"");
+  $("tgCard").style.display="none"; refreshHome();
+}
+$("tgStart").onclick=startTg;
+
+/* ---------------- every chord, for movable shapes ---------------- */
+const PCN=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+const ALLDEFS=[];
+for(let pc=0;pc<12;pc++) for(const q of ["maj","min"])
+  ALLDEFS.push({name:PCN[pc]+(q==="min"?"m":""), rootPc:pc, quality:q, tpl:D.chordTemplate(pc,q)});
+const defIdx=(pc,q)=>ALLDEFS.findIndex(d=>d.rootPc===pc&&d.quality===q);
+
+/* ---------------- SHAPE SHIFTER (CAGED) ---------------- */
+const CAGED={
+  E:{label:"E shape", q:"maj", off:[0,2,2,1,0,0],       fing:[1,3,4,2,1,1], rootStr:0, rootOff:0},
+  Em:{label:"Em shape", q:"min", off:[0,2,2,0,0,0],     fing:[1,3,4,1,1,1], rootStr:0, rootOff:0},
+  A:{label:"A shape", q:"maj", off:[null,0,2,2,2,0],    fing:[0,1,3,3,3,1], rootStr:1, rootOff:0},
+  Am:{label:"Am shape", q:"min", off:[null,0,2,2,1,0],  fing:[0,1,3,4,2,1], rootStr:1, rootOff:0},
+  Dsh:{label:"D shape", q:"maj", off:[null,null,0,2,3,2],fing:[0,0,1,2,4,3], rootStr:2, rootOff:0},
+  Csh:{label:"C shape", q:"maj", off:[null,3,2,0,1,0],  fing:[0,4,3,1,2,1], rootStr:1, rootOff:3},
+};
+const SSIDS=Object.keys(CAGED);
+const SS={picks:["E","A"], on:false, n:0, score:0, shape:"E", fret:0, rootPc:0, revealed:false};
+function buildSSUI(){
+  const b=$("ssShapes"); b.innerHTML="";
+  SSIDS.forEach(id=>{
+    const x=document.createElement("button");
+    x.className="chip small"+(SS.picks.includes(id)?" on":"");
+    x.textContent=CAGED[id].label;
+    x.onclick=()=>{ if(SS.on) return;
+      const i=SS.picks.indexOf(id);
+      if(i>=0){ if(SS.picks.length>1) SS.picks.splice(i,1); } else SS.picks.push(id);
+      buildSSUI(); };
+    b.appendChild(x);
+  });
+}
+function ssMidis(shape,fret){
+  const ms=currentMidis(), s=CAGED[shape];
+  return s.off.map((o,i)=>o===null?null:ms[i]+fret+o);
+}
+function drawShape(svgId, shape, fret, reveal){
+  const s=CAGED[shape];
+  const tmp={frets:s.off.map(o=>o===null?-1:(reveal?fret+o:o)), fingers:s.fing};
+  const W=200,H=214,padX=26,padTop=36,padBot=14;
+  const gw=W-padX*2, gh=H-padTop-padBot, sg=gw/5, fg=gh/4;
+  const x=i=>padX+(LEFTY()?5-i:i)*sg, yf=f=>padTop+f*fg;
+  const base=reveal?fret:0;
+  let out="";
+  for(let f=1;f<=4;f++) out+=`<line x1="${padX}" y1="${yf(f)}" x2="${padX+gw}" y2="${yf(f)}" stroke="#7a6250" stroke-width="1.4"/>`;
+  if(!reveal||fret===0) out+=`<line x1="${padX}" y1="${padTop}" x2="${padX+gw}" y2="${padTop}" stroke="#efe3d1" stroke-width="5" stroke-linecap="round"/>`;
+  for(let i=0;i<6;i++) out+=`<line x1="${x(i)}" y1="${padTop}" x2="${x(i)}" y2="${padTop+gh}" stroke="#c9b09a" stroke-width="${1.6-i*0.15}"/>`;
+  for(let f=1;f<=4;f++) out+=`<text x="${padX-13}" y="${yf(f)-fg/2+4}" fill="#7C6553" font-size="11" font-family="monospace" text-anchor="middle">${reveal?base+f:f}</text>`;
+  s.off.forEach((o,i)=>{
+    if(o===null){ out+=`<text x="${x(i)}" y="${padTop-14}" fill="#7C6553" font-size="15" text-anchor="middle">×</text>`; return; }
+    const rel=o+1;
+    const yy=yf(rel)-fg/2;
+    out+=`<circle cx="${x(i)}" cy="${yy}" r="${sg*0.34}" fill="#D3A24E"/>`;
+    const fin=s.fing[i];
+    if(fin>0) out+=`<text x="${x(i)}" y="${yy+4.5}" fill="#2a1a0e" font-size="13" font-weight="700" text-anchor="middle">${fin}</text>`;
+  });
+  $(svgId).innerHTML=out;
+}
+function startSS(){
+  if(!App.running){ flashEl("ssFlash","Open the mic first (Start, top right)"); return; }
+  SS.on=true; SS.n=0; SS.score=0;
+  $("ssCard").style.display="block"; $("ssVerdict").className="verdict";
+  nextSS();
+}
+function nextSS(){
+  if(SS.n>=8){ endSS(); return; }
+  SS.shape=SS.picks[Math.floor(Math.random()*SS.picks.length)];
+  const s=CAGED[SS.shape], ms=currentMidis();
+  SS.fret=1+Math.floor(Math.random()*7);
+  SS.rootPc=((ms[s.rootStr]+SS.fret+s.rootOff)%12+12)%12;
+  SS.revealed=false;
+  $("ssProg").textContent=`${SS.n+1} / 8`;
+  $("ssName").textContent=PCN[SS.rootPc]+(s.q==="min"?"m":"");
+  $("ssShape").textContent=`using the ${s.label} — find the fret`;
+  drawShape("ssDiag", SS.shape, SS.fret, false);
+  flashEl("ssFlash","strum it when you've got it");
+  armStrum(res=>{
+    if(!SS.on) return;
+    const right=res.verdict==="match";
+    if(right){ SS.score++; tickCorrect(); }
+    flashEl("ssFlash", right
+      ? `✓ ${PCN[SS.rootPc]}${s.q==="min"?"m":""} at fret ${SS.fret}`
+      : (res.verdict==="unclear" ? "not sure — strum fuller and let it ring"
+         : `heard ${ALLDEFS[res.best].name} — the ${s.label} lands at fret ${SS.fret}`), right);
+    if(!right && res.verdict==="unclear"){ nextSSRetry(); return; }
+    SS.n++;
+    setTimeout(()=>{ if(SS.on) nextSS(); }, right?900:2000);
+  }, ()=>defIdx(SS.rootPc, CAGED[SS.shape].q), ALLDEFS);
+}
+function nextSSRetry(){ armStrum(res=>{ if(SS.on) nextSS(); }, ()=>defIdx(SS.rootPc, CAGED[SS.shape].q), ALLDEFS); }
+function endSS(){
+  SS.on=false; Strum.armed=false;
+  const isPR=Store.pr("caged", SS.score);
+  Store.record({d:"caged", score:SS.score});
+  const gate=SS.score>=6;
+  if(gate) tickPass();
+  $("ssVerdict").innerHTML=`<b>${SS.score} / 8</b> movable shapes landed.`+
+    (isPR?" New best.":` Best: ${Store.best("caged")}/8.`)+
+    (gate?" <b>Tier 6 standard ✓</b> The whole neck is open to you now."
+        :" Tip: the root note tells you the fret — count up from the open string.");
+  $("ssVerdict").className="verdict on"+(gate?" good":"");
+  $("ssCard").style.display="none"; refreshHome();
+}
+$("ssStart").onclick=startSS;
+$("ssHint").onclick=()=>{ if(SS.on){ SS.revealed=true; drawShape("ssDiag",SS.shape,SS.fret,true);
+  flashEl("ssFlash",`barre at fret ${SS.fret}`); } };
+
+/* ---------------- modes ---------------- */
+const MODES={
+  ionian:{label:"Ionian", set:[0,2,4,5,7,9,11], char:null, tri:[0,4,7], note:"the major scale itself"},
+  dorian:{label:"Dorian", set:[0,2,3,5,7,9,10], char:9, tri:[0,3,7], note:"minor, but hopeful — the natural 6"},
+  phrygian:{label:"Phrygian", set:[0,1,3,5,7,8,10], char:1, tri:[0,3,7], note:"Spanish darkness — the flat 2"},
+  lydian:{label:"Lydian", set:[0,2,4,6,7,9,11], char:6, tri:[0,4,7], note:"floating, filmic — the sharp 4"},
+  mixolydian:{label:"Mixolydian", set:[0,2,4,5,7,9,10], char:10, tri:[0,4,7], note:"major with swagger — the flat 7"},
+  aeolian:{label:"Aeolian", set:[0,2,3,5,7,8,10], char:8, tri:[0,3,7], note:"natural minor — the flat 6"},
+  locrian:{label:"Locrian", set:[0,1,3,5,6,8,10], char:6, tri:[0,3,6], note:"unstable by design — the flat 5"},
+};
+const MIDS=Object.keys(MODES);
+const DEGREE={1:"b2",2:"2",3:"b3",4:"3",5:"4",6:"#4/b5",7:"5",8:"b6",9:"6",10:"b7",11:"7"};
+
+/* ---------------- DRONE ROOM ---------------- */
+const Drone={on:false, root:4, mode:"dorian", nodes:null, tally:{in:0,out:0,char:0}};
+function buildDroneUI(){
+  const rb=$("drRoot"); rb.innerHTML="";
+  [["E",4],["A",9],["D",2],["G",7],["C",0]].forEach(([n,pc])=>{
+    const b=document.createElement("button");
+    b.className="chip small mono"+(Drone.root===pc?" on":"");
+    b.textContent=n;
+    b.onclick=()=>{ if(Drone.on) return; Drone.root=pc; buildDroneUI(); };
+    rb.appendChild(b);
+  });
+  const mb=$("drMode"); mb.innerHTML="";
+  MIDS.forEach(k=>{
+    const b=document.createElement("button");
+    b.className="chip small"+(Drone.mode===k?" on":"");
+    b.textContent=MODES[k].label;
+    b.onclick=()=>{ if(Drone.on) return; Drone.mode=k; buildDroneUI(); };
+    mb.appendChild(b);
+  });
+  const m=MODES[Drone.mode];
+  $("drChar").innerHTML = m.char===null ? `<b>${m.label}</b> — ${m.note}`
+    : `<b>${m.label}</b> — ${m.note}. Characteristic tone: <b>${DEGREE[m.char]}</b>`;
+}
+function droneStart(){
+  if(!App.running){ $("drChar").textContent="Open the mic first (Start, top right)."; return; }
+  const f=D.freqOfMidi(36+Drone.root);          // low, out of the guitar's busy range
+  const g=App.ctx.createGain(); g.gain.value=0;
+  const lp=App.ctx.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=520;
+  const oscs=[[f,0],[f*1.005,0],[f*1.4983,-4]].map(([hz,db])=>{
+    const o=App.ctx.createOscillator(); o.type="sawtooth"; o.frequency.value=hz;
+    const og=App.ctx.createGain(); og.gain.value=Math.pow(10,db/20)*0.33;
+    o.connect(og).connect(lp); o.start(); return o;
+  });
+  lp.connect(g).connect(App.ctx.destination);
+  g.gain.linearRampToValueAtTime(0.16, App.ctx.currentTime+1.2);
+  Drone.nodes={oscs,g}; Drone.on=true; Drone.tally={in:0,out:0,char:0};
+  $("drCard").style.display="block"; $("drVerdict").className="verdict";
+  $("drNote").textContent="—"; $("drClass").textContent="play anything";
+  $("drCount").textContent="0 notes"; $("drPct").textContent="—"; $("drBar").style.width="0%";
+}
+function droneStop(){
+  if(!Drone.on) return;
+  Drone.on=false;
+  const {oscs,g}=Drone.nodes||{};
+  if(g){ g.gain.linearRampToValueAtTime(0.0001, App.ctx.currentTime+0.4); }
+  if(oscs) setTimeout(()=>oscs.forEach(o=>{try{o.stop()}catch(e){}}), 600);
+  Drone.nodes=null;
+  const t=Drone.tally, total=t.in+t.out;
+  if(total>=8){
+    const pct=Math.round(100*t.in/total);
+    Store.pr(`drone_${Drone.mode}`, pct);
+    Store.record({d:"drone", mode:Drone.mode, pct, chars:t.char});
+    const good=pct>=90;
+    if(good) tickPass();
+    $("drVerdict").innerHTML=`<b>${pct}% in ${MODES[Drone.mode].label}</b> across ${total} notes, landing the characteristic tone ${t.char} time${t.char===1?"":"s"}.`+
+      (good?" <b>Tier 7 standard ✓</b>":" The Tier 7 standard is 90% in-mode.");
+    $("drVerdict").className="verdict on"+(good?" good":"");
+  }
+  $("drCard").style.display="none"; refreshHome();
+}
+function droneNote(midi){
+  if(!Drone.on) return;
+  const m=MODES[Drone.mode];
+  const deg=((midi-Drone.root)%12+12)%12;
+  const inMode=m.set.includes(deg);
+  const isChar=deg===m.char;
+  const isTri=m.tri.includes(deg);
+  if(inMode) Drone.tally.in++; else Drone.tally.out++;
+  if(isChar) Drone.tally.char++;
+  const n=D.noteFromFreq(D.freqOfMidi(midi));
+  $("drNote").textContent=n.name+n.octave;
+  let label, col;
+  if(isChar){ label=`★ characteristic tone — the ${DEGREE[deg]}`; col="var(--ember)"; }
+  else if(isTri){ label=`chord tone — the ${deg===0?"root":DEGREE[deg]}`; col="var(--honey)"; }
+  else if(inMode){ label=`in mode — the ${DEGREE[deg]}`; col="var(--pearl)"; }
+  else { label=`outside — the ${DEGREE[deg]||"root"}`; col="var(--mute)"; }
+  $("drClass").textContent=label; $("drClass").style.color=col;
+  if(isChar) tickCorrect();
+  const t=Drone.tally, total=t.in+t.out, pct=Math.round(100*t.in/Math.max(1,total));
+  $("drPct").textContent=pct+"%"; $("drBar").style.width=pct+"%";
+  $("drCount").textContent=`${total} notes · ${t.char} characteristic`;
+}
+$("drStart").onclick=()=>{ if(Drone.on) droneStop(); else droneStart(); };
+
+/* ---------------- MODE DETECTIVE ---------------- */
+const Det={on:false, n:0, score:0, mode:"dorian", root:4, phrase:[]};
+function startDet(){
+  if(!App.running){ flashEl("mdFlash","Open the mic first (Start, top right)"); return; }
+  Det.on=true; Det.n=0; Det.score=0;
+  $("mdCard").style.display="block"; $("mdVerdict").className="verdict";
+  nextDet();
+}
+function nextDet(){
+  if(Det.n>=8){ endDet(); return; }
+  const pool=MIDS.filter(k=>MODES[k].char!==null);
+  Det.mode=pool[Math.floor(Math.random()*pool.length)];
+  const ms=currentMidis();
+  const s=1+Math.floor(Math.random()*2);
+  const fret=Math.floor(Math.random()*4);
+  Det.root=ms[s]+fret;
+  const set=MODES[Det.mode].set, ch=MODES[Det.mode].char;
+  Det.phrase=[Det.root];
+  for(let i=0;i<4;i++){
+    const d=set[Math.floor(Math.random()*set.length)];
+    Det.phrase.push(Det.root+d);
+  }
+  Det.phrase.push(Det.root+ch);                    // the giveaway, always sounded
+  Det.phrase.push(Det.root);
+  $("mdProg").textContent=`${Det.n+1} / 8`;
+  $("mdRoot").textContent=`root: ${noteLabel(Det.root)} — string ${6-s}, fret ${fret}`;
+  playDet();
+}
+function playDet(){
+  $("mdState").textContent="listen…"; $("mdFlash").textContent="";
+  playPhrase(Det.phrase, 0.55, ()=>{
+    $("mdState").textContent="your turn";
+    flashEl("mdFlash","play the note that gives the mode away");
+    armCapture(()=>({ok:true}), f=>{
+      const got=D.noteFromFreq(f).midi;
+      const want=Det.root+MODES[Det.mode].char;
+      const right=((got-want)%12+12)%12===0;
+      if(right){ Det.score++; tickCorrect(); }
+      const m=MODES[Det.mode];
+      flashEl("mdFlash", right
+        ? `✓ ${m.label} — the ${DEGREE[m.char]}. ${m.note}.`
+        : `✗ it was ${m.label} — the ${DEGREE[m.char]}. ${m.note}.`, right);
+      Det.n++;
+      setTimeout(()=>{ if(Det.on) nextDet(); }, right?1400:2400);
+    });
+  });
+}
+function endDet(){
+  Det.on=false; App.capture=null;
+  const isPR=Store.pr("detective", Det.score);
+  Store.record({d:"detective", score:Det.score});
+  const gate=Det.score>=6;
+  if(gate) tickPass();
+  $("mdVerdict").innerHTML=`<b>${Det.score} / 8</b> modes named by ear.`+
+    (isPR?" New best.":` Best: ${Store.best("detective")}/8.`)+
+    (gate?" <b>Tier 7 standard ✓</b> Put on 'So What' — you'll hear D Dorian inside four bars."
+        :" Sit in the Drone Room with one mode until its colour is obvious, then come back.");
+  $("mdVerdict").className="verdict on"+(gate?" good":"");
+  $("mdCard").style.display="none"; refreshHome();
+}
+$("mdStart").onclick=startDet;
+$("mdReplay").onclick=()=>{ if(Det.on){ App.capture=null; playDet(); } };
+
+/* ---------------- SING BACK (opt-in, voice) ----------------
+   The pitch detector never cared what vibrated. Octave-agnostic on purpose:
+   singing a note an octave down is a right answer, not a wrong one.        */
+const SINGON=()=>localStorage.getItem("cf_sing")==="1";
+const Sg={on:false,n:0,score:0,target:0,best:null};
+function octCents(f, targetMidi){
+  const tf=D.freqOfMidi(targetMidi);
+  let c=D.centsBetween(f,tf);
+  while(c>600) c-=1200;
+  while(c<-600) c+=1200;
+  return c;
+}
+function startSg(){
+  if(!App.running){ flashEl("sgFlash","Open the mic first (Start, top right)"); return; }
+  Sg.on=true; Sg.n=0; Sg.score=0;
+  $("sgCard").style.display="block"; $("sgVerdict").className="verdict";
+  nextSg();
+}
+function nextSg(){
+  if(Sg.n>=8){ endSg(); return; }
+  Sg.target=52+Math.floor(Math.random()*13);        // E3–E4, comfortable for most voices
+  $("sgProg").textContent=`${Sg.n+1} / 8`;
+  $("sgNote").textContent=noteLabel(Sg.target);
+  playSg();
+}
+function playSg(){
+  $("sgState").textContent="listen…"; $("sgFlash").textContent="";
+  Sg.best=null;
+  playPhrase([Sg.target], 1.0, ()=>{
+    $("sgState").textContent="now sing it — hold the note";
+    flashEl("sgFlash","any octave is fine");
+    armCapture(f=>{
+      const c=octCents(f, Sg.target);
+      if(Sg.best===null||Math.abs(c)<Math.abs(Sg.best)) Sg.best=c;
+      return {ok:true};
+    }, f=>{
+      const c=octCents(f, Sg.target);
+      const right=Math.abs(c)<=30;
+      if(right){ Sg.score++; tickCorrect(); }
+      flashEl("sgFlash", right
+        ? `✓ within ${Math.abs(c).toFixed(0)} cents`
+        : `${Math.abs(c).toFixed(0)} cents ${c<0?"flat — slide up":"sharp — ease down"}`, right);
+      Sg.n++; setTimeout(()=>{ if(Sg.on) nextSg(); }, right?1100:1900);
+    });
+  });
+}
+function endSg(){
+  Sg.on=false; App.capture=null;
+  const isPR=Store.pr("sing", Sg.score);
+  Store.record({d:"sing", score:Sg.score});
+  $("sgVerdict").innerHTML=`<b>${Sg.score} / 8</b> pitches matched by voice.`+
+    (isPR?" New best.":` Best: ${Store.best("sing")}/8.`)+
+    ` Nothing here affects your tiers — this is pure ear-building.`;
+  $("sgVerdict").className="verdict on"+(Sg.score>=6?" good":"");
+  $("sgCard").style.display="none"; refreshHome();
+}
+$("sgStart").onclick=startSg;
+$("sgReplay").onclick=()=>{ if(Sg.on){ App.capture=null; playSg(); } };
+
+/* ---------------- QUALITY CALL (ear) ---------------- */
+const QUALS=[{q:"maj",iv:[0,4,7],id:4,label:"major",tone:"the 3rd"},
+             {q:"min",iv:[0,3,7],id:3,label:"minor",tone:"the b3"},
+             {q:"dim",iv:[0,3,6],id:6,label:"diminished",tone:"the b5"}];
+const Qc={on:false,n:0,score:0,root:0,pick:null};
+function startQc(){
+  if(!App.running){ flashEl("qcFlash","Open the mic first (Start, top right)"); return; }
+  Qc.on=true; Qc.n=0; Qc.score=0;
+  $("qcCard").style.display="block"; $("qcVerdict").className="verdict";
+  nextQc();
+}
+function nextQc(){
+  if(Qc.n>=10){ endQc(); return; }
+  const ms=currentMidis();
+  const s=1+Math.floor(Math.random()*2), fret=Math.floor(Math.random()*4);
+  Qc.root=ms[s]+fret;
+  Qc.pick=QUALS[Math.floor(Math.random()*QUALS.length)];
+  $("qcProg").textContent=`${Qc.n+1} / 10`;
+  $("qcRoot").textContent=`root: ${noteLabel(Qc.root)} — string ${6-s}, fret ${fret}`;
+  playQc();
+}
+function playQc(){
+  $("qcState").textContent="listen…"; $("qcFlash").textContent="";
+  playPhrase(Qc.pick.iv.map(i=>Qc.root+i), 0.30, ()=>{
+    $("qcState").textContent="your turn";
+    flashEl("qcFlash","play the note that names it");
+    armCapture(()=>({ok:true}), f=>{
+      const got=D.noteFromFreq(f).midi;
+      const right=((got-(Qc.root+Qc.pick.id))%12+12)%12===0;
+      if(right){ Qc.score++; tickCorrect(); }
+      flashEl("qcFlash", right?`✓ ${Qc.pick.label} — ${Qc.pick.tone}`
+                              :`✗ that was ${Qc.pick.label} — ${Qc.pick.tone}`, right);
+      Qc.n++; setTimeout(()=>{ if(Qc.on) nextQc(); }, right?1000:1900);
+    });
+  });
+}
+function endQc(){
+  Qc.on=false; App.capture=null;
+  const isPR=Store.pr("quality", Qc.score);
+  Store.record({d:"quality", score:Qc.score});
+  const gate=Qc.score>=8; if(gate) tickPass();
+  $("qcVerdict").innerHTML=`<b>${Qc.score} / 10</b> chord qualities named.`+
+    (isPR?" New best.":` Best: ${Store.best("quality")}/10.`)+
+    (gate?" <b>Your ear knows major from minor now ✓</b>":" The third is the whole story — sing it before you play it.");
+  $("qcVerdict").className="verdict on"+(gate?" good":"");
+  $("qcCard").style.display="none"; refreshHome();
+}
+$("qcStart").onclick=startQc;
+$("qcReplay").onclick=()=>{ if(Qc.on){ App.capture=null; playQc(); } };
+
+/* ---------------- BASS DETECTIVE (ear) ---------------- */
+const BPROGS=[
+  {name:"I – IV – V – I", degs:[0,5,7,0], qs:["maj","maj","maj","maj"]},
+  {name:"I – V – vi – IV", degs:[0,7,9,5], qs:["maj","maj","min","maj"]},
+  {name:"I – vi – IV – V", degs:[0,9,5,7], qs:["maj","min","maj","maj"]},
+  {name:"ii – V – I – I", degs:[2,7,0,0], qs:["min","maj","maj","maj"]},
+];
+const Bd={on:false,n:0,score:0,prog:null,root:0,missed:false};
+function startBd(){
+  if(!App.running){ flashEl("bdFlash","Open the mic first (Start, top right)"); return; }
+  Bd.on=true; Bd.n=0; Bd.score=0;
+  $("bdCard").style.display="block"; $("bdVerdict").className="verdict";
+  nextBd();
+}
+function nextBd(){
+  if(Bd.n>=5){ endBd(); return; }
+  Bd.prog=BPROGS[Math.floor(Math.random()*BPROGS.length)];
+  const ms=currentMidis();
+  Bd.root=ms[0]+Math.floor(Math.random()*5);          // low E string, frets 0-4
+  $("bdProg").textContent=`${Bd.n+1} / 5`;
+  $("bdKey").textContent=`home note: ${noteLabel(Bd.root)} — string 6, fret ${Bd.root-ms[0]}`;
+  playBd();
+}
+function playBd(){
+  seqStop();
+  $("bdState").textContent="listen…"; $("bdFlash").textContent="";
+  const notes=[];
+  Bd.prog.degs.forEach((d,i)=>{
+    const r=Bd.root+d, iv=D.CHORD_IV[Bd.prog.qs[i]]||[0,4,7];
+    iv.forEach(x=>notes.push(r+x+12));
+  });
+  const t0=App.ctx.currentTime+0.2;
+  Bd.prog.degs.forEach((d,i)=>{
+    const r=Bd.root+d+12, iv=D.CHORD_IV[Bd.prog.qs[i]]||[0,4,7];
+    iv.forEach((x,j)=>playNote(r+x, t0+i*0.95+j*0.03));
+  });
+  const ms=(0.2+4*0.95+0.7)*1000;
+  App.playUntil=now()+ms; App.lastEventMidi=null;
+  setTimeout(()=>{
+    App.lastEventMidi=null;
+    $("bdState").textContent="your turn";
+    flashEl("bdFlash","play the four root notes in order");
+    Bd.missed=false;
+    Seq.pcMode=true;
+    seqStart(Bd.prog.degs.map(d=>Bd.root+d), {
+      step:(m,i)=>{ $("bdState").textContent=`root ${i+1} of 4`; },
+      wrong:()=>{ Bd.missed=true; flashEl("bdFlash","not that one — listen to the lowest note of each chord"); },
+      done:()=>{
+        Seq.pcMode=false;
+        if(!Bd.missed){ Bd.score++; tickCorrect(); }
+        flashEl("bdFlash", `${Bd.missed?"got there —":"✓"} that was ${Bd.prog.name}`, !Bd.missed);
+        Bd.n++; setTimeout(()=>{ if(Bd.on) nextBd(); }, 1700);
+      }
+    });
+  }, ms);
+}
+function endBd(){
+  Bd.on=false; seqStop(); Seq.pcMode=false;
+  const isPR=Store.pr("bassline", Bd.score);
+  Store.record({d:"bassline", score:Bd.score});
+  const gate=Bd.score>=4; if(gate) tickPass();
+  $("bdVerdict").innerHTML=`<b>${Bd.score} / 5</b> bass lines followed.`+
+    (isPR?" New best.":` Best: ${Store.best("bassline")}/5.`)+
+    (gate?" <b>You're hearing harmony move ✓</b> That's how songs get learned by ear."
+        :" Listen for the lowest note in each chord — everything else sits on top of it.");
+  $("bdVerdict").className="verdict on"+(gate?" good":"");
+  $("bdCard").style.display="none"; refreshHome();
+}
+$("bdStart").onclick=startBd;
+$("bdReplay").onclick=()=>{ if(Bd.on) playBd(); };
+
+/* ---------------- SUBDIVIDER ---------------- */
+const Sd={on:false,rate:2,grid:[],hits:[],count:0,endTimer:null};
+function buildSdUI(){
+  const b=$("sdRate"); b.innerHTML="";
+  [[2,"eighths"],[4,"sixteenths"]].forEach(([r,l])=>{
+    const x=document.createElement("button");
+    x.className="chip"+(Sd.rate===r?" on":"");
+    x.textContent=l;
+    x.onclick=()=>{ if(Sd.on) return; Sd.rate=r; buildSdUI(); };
+    b.appendChild(x);
+  });
+}
+$("sdBpm").oninput=e=>$("sdBpmV").textContent=e.target.value;
+function startSd(){
+  if(!App.running){ $("sdProg").textContent="Open the mic first."; return; }
+  if(!App.latency){ $("sdProg").textContent="Run Sync on the Beat screen first."; $("sdCard").style.display="block"; return; }
+  const bpm=+$("sdBpm").value, beat=60/bpm;
+  const t0=App.ctx.currentTime+0.5;
+  const clicks=[]; for(let k=0;k<12;k++) clicks.push(t0+k*beat);   // 4 count-in + 8
+  Sd.grid=[]; for(let k=4*Sd.rate;k<12*Sd.rate;k++) Sd.grid.push(t0+k*beat/Sd.rate);
+  Sd.hits=[]; Sd.count=0; Sd.on=true;
+  $("sdCard").style.display="block"; $("sdVerdict").className="verdict";
+  $("sdProg").textContent="count-in…"; $("sdDelta").textContent="·"; $("sdMark").style.display="none";
+  metRun(clicks, 4);
+  Sd.endTimer=setTimeout(endSd,(12*beat+0.7)*1000);
+}
+function sdOnset(o){
+  if(!Sd.on) return;
+  Sd.hits.push(o.t);
+  const tU=o.t-App.latency;
+  let best=null;
+  for(const g of Sd.grid){ const d=(tU-g)*1000; if(best===null||Math.abs(d)<Math.abs(best)) best=d; }
+  if(best!==null&&Math.abs(best)<=140){
+    Sd.count++;
+    $("sdProg").textContent=`${Sd.count} / ${Sd.grid.length}`;
+    const band=Math.abs(best)<=25?"tight":(Math.abs(best)<=55?"solid":(best<0?"early":"late"));
+    $("sdDelta").textContent=`${best>=0?"+":""}${best.toFixed(0)} ms · ${band}`;
+    $("sdDelta").style.color=Math.abs(best)<=25?"var(--ember)":(Math.abs(best)<=55?"var(--honey)":"var(--taupe)");
+    if(Math.abs(best)<=25) tickCorrect();
+    const mk=$("sdMark"); mk.style.display="block";
+    mk.style.left=(50+Math.max(-45,Math.min(45,best*0.5)))+"%";
+  }
+}
+function endSd(){
+  if(!Sd.on) return;
+  Sd.on=false; metStop(); clearTimeout(Sd.endTimer);
+  const r=D.scoreHits(Sd.grid,Sd.hits,App.latency,140);
+  const bpm=+$("sdBpm").value;
+  const isPR=Store.pr(`subdiv_${Sd.rate}_${bpm}`, Math.round(r.solidPct));
+  Store.record({d:"subdiv", rate:Sd.rate, bpm, solid:Math.round(r.solidPct), tight:Math.round(r.tightPct)});
+  const good=r.solidPct>=75; if(good) tickPass();
+  const tend=r.avgMs>8?"you're dragging the offbeats":(r.avgMs<-8?"you're rushing the offbeats":"evenly placed");
+  $("sdVerdict").innerHTML=`<b>${Math.round(r.tightPct)}% tight · ${Math.round(r.solidPct)}% solid</b> across ${Sd.grid.length} ${Sd.rate===2?"eighths":"sixteenths"} — ${tend}.`+
+    (isPR?" New best here.":"")+(good?" <b>Clean subdivision ✓</b>":" Try halving the tempo — the gaps are where time gets lost.");
+  $("sdVerdict").className="verdict on"+(good?" good":"");
+  $("sdCard").style.display="none"; refreshHome();
+}
+$("sdStart").onclick=startSd;
+
+/* ---------------- CAPO COMPASS ---------------- */
+const CSHAPES={ E:{pc:4,frets:[0,2,2,1,0,0]}, A:{pc:9,frets:[-1,0,2,2,2,0]},
+                D:{pc:2,frets:[-1,-1,0,2,3,2]}, C:{pc:0,frets:[-1,3,2,0,1,0]},
+                G:{pc:7,frets:[3,2,0,0,0,3]} };
+const Cp={on:false,n:0,score:0,shape:"G",fret:1,target:0,si:0,slips:0};
+function startCp(){
+  if(!App.running){ flashEl("cpFlash","Open the mic first (Start, top right)"); return; }
+  Cp.on=true; Cp.n=0; Cp.score=0;
+  $("cpCard").style.display="block"; $("cpVerdict").className="verdict";
+  nextCp();
+}
+function nextCp(){
+  if(Cp.n>=6){ endCp(); return; }
+  const ids=Object.keys(CSHAPES);
+  Cp.shape=ids[Math.floor(Math.random()*ids.length)];
+  Cp.fret=1+Math.floor(Math.random()*6);
+  Cp.target=(CSHAPES[Cp.shape].pc+Cp.fret)%12;
+  Cp.si=0; Cp.slips=0;
+  $("cpProg").textContent=`${Cp.n+1} / 6`;
+  $("cpTarget").textContent=PCN[Cp.target]+" major";
+  $("cpShape").textContent=`using ${Cp.shape} shapes — which fret?`;
+  flashEl("cpFlash","clamp the capo, then pick each string of the shape");
+  armCpStep();
+}
+function armCpStep(){
+  const sh=CSHAPES[Cp.shape], ms=currentMidis();
+  while(Cp.si<6 && sh.frets[Cp.si]<0) Cp.si++;
+  if(Cp.si>=6){ cpDone(true); return; }
+  const want=ms[Cp.si]+Cp.fret+sh.frets[Cp.si];
+  armCapture(f=>({ok:Math.abs(D.centsBetween(f,D.freqOfMidi(want)))<=55}),
+    ()=>{ tickCorrect(); Cp.si++; armCpStep(); },
+    f=>{ const h=D.noteFromFreq(f), diff=h.midi-want;
+      Cp.slips++;
+      flashEl("cpFlash", Math.abs(diff)<=4
+        ? `heard ${h.name}${h.octave} — capo is ${Math.abs(diff)} fret${Math.abs(diff)>1?"s":""} too ${diff<0?"low":"high"}`
+        : `heard ${h.name}${h.octave} — expecting string ${6-Cp.si} of the ${Cp.shape} shape`); });
+}
+function cpDone(){
+  App.capture=null;
+  const clean=Cp.slips===0;
+  if(clean) Cp.score++;
+  tickPass();
+  flashEl("cpFlash", clean?`✓ capo ${Cp.fret} + ${Cp.shape} shape = ${PCN[Cp.target]}`
+                          :`right in the end — capo ${Cp.fret} + ${Cp.shape} shape = ${PCN[Cp.target]}`, clean);
+  Cp.n++;
+  setTimeout(()=>{ if(Cp.on) nextCp(); }, 1800);
+}
+function endCp(){
+  Cp.on=false; App.capture=null;
+  const isPR=Store.pr("compass", Cp.score);
+  Store.record({d:"compass", score:Cp.score});
+  const gate=Cp.score>=4; if(gate) tickPass();
+  $("cpVerdict").innerHTML=`<b>${Cp.score} / 6</b> found first time.`+
+    (isPR?" New best.":` Best: ${Store.best("compass")}/6.`)+
+    (gate?" <b>The capo is a key changer now, not a crutch ✓</b> Every open-chord song you know just gained twelve keys."
+        :" Count semitones up from the shape's own root — that's the fret.");
+  $("cpVerdict").className="verdict on"+(gate?" good":"");
+  $("cpCard").style.display="none"; refreshHome();
+}
+$("cpStart").onclick=startCp;
+$("cpHint").onclick=()=>{ if(Cp.on) flashEl("cpFlash",`capo at fret ${Cp.fret}`); };
+
+/* ---------------- chord data ---------------- */
+const CHORDS = {
+  Em:{frets:[0,2,2,0,0,0], fingers:[0,2,3,0,0,0], root:4, q:"min", spell:"E · G · B"},
+  G :{frets:[3,2,0,0,0,3], fingers:[2,1,0,0,0,3], root:7, q:"maj", spell:"G · B · D"},
+  C :{frets:[-1,3,2,0,1,0],fingers:[0,3,2,0,1,0], root:0, q:"maj", spell:"C · E · G"},
+  D :{frets:[-1,-1,0,2,3,2],fingers:[0,0,0,1,3,2],root:2, q:"maj", spell:"D · F# · A"},
+  Am:{frets:[-1,0,2,2,1,0],fingers:[0,0,2,3,1,0], root:9, q:"min", spell:"A · C · E"},
+  A :{frets:[-1,0,2,2,2,0],fingers:[0,0,1,2,3,0], root:9, q:"maj", spell:"A · C# · E"},
+  E :{frets:[0,2,2,1,0,0], fingers:[0,2,3,1,0,0], root:4, q:"maj", spell:"E · G# · B"},
+  Dm:{frets:[-1,-1,0,2,3,1],fingers:[0,0,0,2,3,1],root:2, q:"min", spell:"D · F · A"},
+};
+const SEVENTHS={
+  Cmaj7:{frets:[-1,3,2,0,0,0], fingers:[0,3,2,0,0,0], root:0, q:"maj7", spell:"C · E · G · B"},
+  Dm7:{frets:[-1,-1,0,2,1,1], fingers:[0,0,0,3,1,1], root:2, q:"min7", spell:"D · F · A · C"},
+  G7:{frets:[3,2,0,0,0,1],   fingers:[3,2,0,0,0,1], root:7, q:"dom7", spell:"G · B · D · F"},
+  Am7:{frets:[-1,0,2,0,1,0], fingers:[0,0,2,0,1,0], root:9, q:"min7", spell:"A · C · E · G"},
+  D7:{frets:[-1,-1,0,2,1,2], fingers:[0,0,0,2,1,3], root:2, q:"dom7", spell:"D · F# · A · C"},
+  Gmaj7:{frets:[3,2,0,0,0,2],fingers:[3,2,0,0,0,1], root:7, q:"maj7", spell:"G · B · D · F#"},
+  Em7:{frets:[0,2,0,0,0,0],  fingers:[0,2,0,0,0,0], root:4, q:"min7", spell:"E · G · B · D"},
+  A7:{frets:[-1,0,2,0,2,0],  fingers:[0,0,2,0,3,0], root:9, q:"dom7", spell:"A · C# · E · G"},
+  Dmaj7:{frets:[-1,-1,0,2,2,2],fingers:[0,0,0,1,1,1],root:2, q:"maj7", spell:"D · F# · A · C#"},
+  E7:{frets:[0,2,0,1,0,0],   fingers:[0,2,0,1,0,0], root:4, q:"dom7", spell:"E · G# · B · D"},
+  Fmaj7:{frets:[-1,-1,3,2,1,0],fingers:[0,0,3,2,1,0],root:5, q:"maj7", spell:"F · A · C · E"},
+};
+const CHORDLIB=Object.assign({}, CHORDS, SEVENTHS);
+const FAMILIES={ triads:Object.keys(CHORDS), sevenths:Object.keys(SEVENTHS) };
+const DEFCACHE={};
+function famDefs(fam){
+  if(!DEFCACHE[fam]) DEFCACHE[fam]=FAMILIES[fam].map(n=>({name:n, rootPc:CHORDLIB[n].root,
+    quality:CHORDLIB[n].q, tpl:D.chordTemplate(CHORDLIB[n].root, CHORDLIB[n].q)}));
+  return DEFCACHE[fam];
+}
+let CNAMES=FAMILIES.triads;
+let CDEFS=famDefs("triads");
+const STD=[40,45,50,55,59,64];
+const chordMidis = name => CHORDLIB[name].frets.map((f,i)=> f<0 ? null : STD[i]+f);
+const stdTuning = () => currentMidis().every((m,i)=>m===STD[i]);
+
+const LEFTY=()=>localStorage.getItem("cf_lefty")==="1";
+function drawChord(svgId, name){
+  const c=CHORDLIB[name], W=200,H=214,padX=26,padTop=36,padBot=14;
+  const gw=W-padX*2, gh=H-padTop-padBot, sg=gw/5, fg=gh/4;
+  const x=i=>padX+(LEFTY()?5-i:i)*sg, yf=f=>padTop+f*fg;
+  let s="";
+  for(let f=1;f<=4;f++) s+=`<line x1="${padX}" y1="${yf(f)}" x2="${padX+gw}" y2="${yf(f)}" stroke="#7a6250" stroke-width="1.4"/>`;
+  s+=`<line x1="${padX}" y1="${padTop}" x2="${padX+gw}" y2="${padTop}" stroke="#efe3d1" stroke-width="5" stroke-linecap="round"/>`;
+  for(let i=0;i<6;i++) s+=`<line x1="${x(i)}" y1="${padTop}" x2="${x(i)}" y2="${padTop+gh}" stroke="#c9b09a" stroke-width="${1.6-i*0.15}"/>`;
+  for(let f=1;f<=4;f++) s+=`<text x="${padX-13}" y="${yf(f)-fg/2+4}" fill="#7C6553" font-size="11" font-family="monospace" text-anchor="middle">${f}</text>`;
+  c.frets.forEach((fr,i)=>{
+    if(fr<0){ s+=`<text x="${x(i)}" y="${padTop-14}" fill="#7C6553" font-size="15" text-anchor="middle">×</text>`; return; }
+    if(fr===0){ s+=`<circle cx="${x(i)}" cy="${padTop-19}" r="5.4" fill="none" stroke="#d8c6ad" stroke-width="1.8"/>`; return; }
+    const yy=yf(fr)-fg/2, fin=c.fingers[i];
+    s+=`<circle cx="${x(i)}" cy="${yy}" r="${sg*0.34}" fill="#D3A24E"/>`;
+    if(fin>0) s+=`<text x="${x(i)}" y="${yy+4.5}" fill="#2a1a0e" font-size="13" font-weight="700" text-anchor="middle">${fin}</text>`;
+  });
+  $(svgId).innerHTML=s;
+}
+
+/* ---------------- Chord Check ---------------- */
+const CC={name:"Em", fam:"triads", mode:null, si:0, ok:[]};
+const Strum={armed:false, timer:null, onResult:null, idxFn:null, defs:null};
+function buildChordPick(){
+  const fb=$("ccFamily"); fb.innerHTML="";
+  [["triads","Open chords"],["sevenths","Sevenths"]].forEach(([k,l])=>{
+    const b=document.createElement("button");
+    b.className="chip small"+(CC.fam===k?" on":"");
+    b.textContent=l;
+    b.onclick=()=>{ CC.fam=k; CNAMES=FAMILIES[k]; CDEFS=famDefs(k);
+      CC.name=CNAMES[0]; Chg.a=CNAMES[0]; Chg.b=CNAMES[1];
+      buildChordPick(); buildChgPicks(); ccStop(); };
+    fb.appendChild(b);
+  });
+  const box=$("chordPick"); box.innerHTML="";
+  CNAMES.forEach(n=>{
+    const b=document.createElement("button");
+    b.className="chip small mono"+(CC.name===n?" on":"");
+    b.textContent=n;
+    b.onclick=()=>{ CC.name=n; buildChordPick(); ccStop(); };
+    box.appendChild(b);
+  });
+  $("ccTuneWarn").textContent = stdTuning()? "" : "Chord shapes assume standard tuning — switch back in Setup › Lab.";
+}
+function ccStop(){ CC.mode=null; Strum.armed=false; Strum.idxFn=null; Strum.defs=null; clearTimeout(Strum.timer);
+  App.capture=null; $("ccCard").style.display="none"; $("ccVerdict").className="verdict"; }
+function ccRenderStrings(){
+  const box=$("ccStrings"); box.innerHTML="";
+  const ms=chordMidis(CC.name);
+  ms.forEach((m,i)=>{
+    if(m===null){
+      box.innerHTML+=`<div class="srow"><span>String ${6-i}</span><span class="tag" style="color:var(--mute)">don't play</span></div>`;
+      return;
+    }
+    const state = CC.ok[i]? " ok" : (i===CC.si? " on":"");
+    const mark = CC.ok[i]? "✓" : noteLabel(m);
+    box.innerHTML+=`<div class="srow${state}"><span>String ${6-i} · fret ${CHORDS[CC.name].frets[i]}</span><span class="tag">${mark}</span></div>`;
+  });
+}
+function startArp(){
+  if(!App.running){ flashEl("ccFlash","Open the mic first (Start, top right)"); return; }
+  CC.mode="arp"; CC.si=0; CC.ok=[];
+  $("ccCard").style.display="block"; $("ccVerdict").className="verdict";
+  $("ccMode").textContent="arpeggio — pick one string at a time";
+  $("ccName").textContent=CC.name;
+  drawChord("ccDiag", CC.name);
+  while(chordMidis(CC.name)[CC.si]===null) CC.si++;
+  ccRenderStrings(); armArpStep();
+}
+function armArpStep(){
+  const ms=chordMidis(CC.name);
+  if(CC.si>=6){ arpDone(); return; }
+  if(ms[CC.si]===null){ CC.si++; armArpStep(); return; }
+  const want=ms[CC.si];
+  flashEl("ccFlash",`pick string ${6-CC.si}`);
+  armCapture(
+    f => ({ok: Math.abs(D.centsBetween(f, D.freqOfMidi(want)))<=55}),
+    () => { CC.ok[CC.si]=true; tickCorrect(); CC.si++; ccRenderStrings(); armArpStep(); },
+    f => {
+      const h=D.noteFromFreq(f), diff=h.midi-want;
+      let hint;
+      if(Math.abs(diff)>=11) hint="that's a different string — count from the thickest";
+      else if(diff<0) hint=`too low by ${-diff} fret${diff<-1?"s":""}`;
+      else hint=`too high by ${diff} fret${diff>1?"s":""}`;
+      flashEl("ccFlash",`heard ${h.name}${h.octave} — ${hint}`);
+    }
+  );
+}
+function arpDone(){
+  CC.mode=null; App.capture=null;
+  Store.record({d:"chordarp", chord:CC.name});
+  Store.pr("arp_"+CC.name, 1);
+  tickPass();
+  $("ccVerdict").innerHTML=`<b>${CC.name} verified string by string ✓</b> Every note rang true. Notes: <b>${CHORDLIB[CC.name].spell}</b>. Now try the strum check.`;
+  $("ccVerdict").className="verdict on good";
+  $("ccCard").style.display="none";
+}
+function startStrumCheck(){
+  if(!App.running){ flashEl("ccFlash","Open the mic first (Start, top right)"); return; }
+  CC.mode="strum";
+  $("ccCard").style.display="block"; $("ccVerdict").className="verdict";
+  $("ccMode").textContent="strum — one strum, let it ring";
+  $("ccName").textContent=CC.name;
+  drawChord("ccDiag", CC.name); CC.ok=[]; ccRenderStrings();
+  flashEl("ccFlash","strum when ready…");
+  armStrum(res=>{
+    const idx=CNAMES.indexOf(CC.name);
+    if(res.verdict==="match"){
+      tickPass();
+      $("ccVerdict").innerHTML=`<b>${CC.name} ✓</b> Clean and unmistakable. Notes: <b>${CHORDLIB[CC.name].spell}</b>.`;
+      $("ccVerdict").className="verdict on good";
+    } else if(res.verdict==="unclear"){
+      $("ccVerdict").innerHTML=`<b>Not sure.</b> Strings may be muted or the strum too quiet — strum fuller and let it ring, or run the arpeggio check to find the culprit.`;
+      $("ccVerdict").className="verdict on";
+    } else {
+      const heard=CDEFS[res.best].name;
+      $("ccVerdict").innerHTML=`<b>That sounded like ${heard}.</b> Run the arpeggio check on ${CC.name} — it'll name the string that's off.`;
+      $("ccVerdict").className="verdict on";
+    }
+    $("ccCard").style.display="none"; CC.mode=null;
+  });
+}
+function armStrum(cb, idxFn, defs){ Strum.armed=true; Strum.onResult=cb; Strum.idxFn=idxFn||null; Strum.defs=defs||null; }
+function strumOnset(){
+  if(!Strum.armed) return;
+  Strum.armed=false;
+  clearTimeout(Strum.timer);
+  /* let the pick noise pass, judge the ring */
+  Strum.timer=setTimeout(()=>{
+    const {chroma,bassPc}=App.chroma.analyze(ringOrdered());
+    const defs=Strum.defs||CDEFS;
+    const idx=Strum.idxFn ? Strum.idxFn() : CNAMES.indexOf(Chg.on? Chg.want : CC.name);
+    const res=D.judgeChord(chroma,bassPc,idx,defs);
+    if(Strum.onResult) Strum.onResult(res);
+  }, 260);
+}
+$("ccArp").onclick=startArp;
+$("ccStrum").onclick=startStrumCheck;
+
+/* ---------------- Change Counter ---------------- */
+const Chg={a:"Em", b:"G", on:false, want:"Em", n:0, endT:0, timer:null};
+function buildChgPicks(){
+  [["chgA","a"],["chgB","b"]].forEach(([id,key])=>{
+    const box=$(id); box.innerHTML="";
+    CNAMES.forEach(n=>{
+      const b=document.createElement("button");
+      b.className="chip small mono"+(Chg[key]===n?" on":"");
+      b.textContent=n;
+      b.onclick=()=>{ if(Chg.on) return; Chg[key]=n; buildChgPicks(); };
+      box.appendChild(b);
+    });
+  });
+}
+function startChg(){
+  if(!App.running){ flashEl("chgFlash","Open the mic first (Start, top right)"); return; }
+  if(Chg.a===Chg.b){ flashEl("chgFlash","Pick two different chords"); return; }
+  Chg.on=true; Chg.n=0; Chg.want=Chg.a; Chg.endT=now()+60000;
+  $("chgCard").style.display="block"; $("chgVerdict").className="verdict";
+  $("chgScore").textContent="changes: 0";
+  chgPrompt();
+  Chg.timer=setInterval(()=>{
+    const left=Math.max(0,(Chg.endT-now())/1000);
+    $("chgTime").textContent=left.toFixed(0)+"s";
+    if(left<=0) endChg();
+  },250);
+}
+function chgPrompt(){
+  $("chgNow").textContent=Chg.want;
+  drawChord("chgDiag", Chg.want);
+  flashEl("chgFlash","strum it");
+  armStrum(res=>{
+    if(!Chg.on) return;
+    if(res.verdict==="match"){
+      Chg.n++; tickCorrect();
+      $("chgScore").textContent="changes: "+Chg.n;
+      Chg.want = Chg.want===Chg.a? Chg.b : Chg.a;
+      chgPrompt();
+    } else {
+      flashEl("chgFlash", res.verdict==="unclear" ? "not sure — strum fuller" : `heard ${CDEFS[res.best].name} — try again`);
+      chgRearm();
+    }
+  });
+}
+function chgRearm(){ if(!Chg.on) return; armStrum(res=>{
+  if(!Chg.on) return;
+  if(res.verdict==="match"){
+    Chg.n++; tickCorrect(); $("chgScore").textContent="changes: "+Chg.n;
+    Chg.want = Chg.want===Chg.a? Chg.b : Chg.a; chgPrompt();
+  } else { flashEl("chgFlash", res.verdict==="unclear"?"not sure — strum fuller":`heard ${CDEFS[res.best].name} — try again`); chgRearm(); }
+}); }
+function endChg(){
+  clearInterval(Chg.timer); Chg.on=false; Strum.armed=false; clearTimeout(Strum.timer);
+  const key=`chg_${Chg.a}_${Chg.b}`;
+  const isPR=Store.pr(key, Chg.n);
+  Store.record({d:"changes", a:Chg.a, b:Chg.b, n:Chg.n});
+  const gate=Chg.n>=30;
+  if(gate) tickPass();
+  $("chgVerdict").innerHTML=`<b>${Chg.n} verified changes</b> between ${Chg.a} and ${Chg.b}.`+
+    (isPR?" New personal record.":` Best: ${Store.best(key)}.`)+
+    (gate?" <b>Tier 5 gate standard ✓</b>":" The Tier 5 gate is 30+ per minute.");
+  $("chgVerdict").className="verdict on"+(gate?" good":"");
+  $("chgCard").style.display="none";
+  refreshHome();
+}
+$("chgStart").onclick=startChg;
+
+/* ---------------- About: backup + tip ---------------- */
+function refreshAbout(){
+  paintLefty();
+  $("aboutBuild").textContent=BUILD;
+  $("aboutRecs").textContent=Store.data.records.length+" sessions";
+}
+$("expBtn").onclick=()=>{
+  const blob=new Blob([JSON.stringify(Store.data,null,1)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="campfire-backup-"+new Date().toISOString().slice(0,10)+".json";
+  a.click();
+};
+$("impBtn").onclick=()=>$("impFile").click();
+$("impFile").onchange=e=>{
+  const f=e.target.files&&e.target.files[0]; if(!f) return;
+  const fr=new FileReader();
+  fr.onload=()=>{
+    try{
+      const d=JSON.parse(fr.result);
+      if(!d||d.v!==1||!Array.isArray(d.records)) throw new Error("not a Campfire backup");
+      const n=d.records.length, p=Object.keys(d.prs||{}).length;
+      if(!confirm(`Restore ${n} sessions and ${p} personal bests? This replaces what's on this phone.`)) return;
+      Store.data={v:1, records:d.records, prs:d.prs||{}}; Store.save();
+      refreshAbout(); refreshHome();
+      alert("Restored.");
+    }catch(err){ alert("Couldn't read that file: "+err.message); }
+  };
+  fr.readAsText(f);
+  e.target.value="";
+};
+function paintLefty(){ $("leftyBtn").textContent = LEFTY()? "on":"off";
+  $("singBtn").textContent = SINGON()? "on":"off"; }
+$("singBtn").onclick=()=>{
+  localStorage.setItem("cf_sing", SINGON()?"0":"1");
+  paintLefty(); buildSubnav("ear");
+  if(!SINGON() && App.subs.ear==="sing") setSub("ear","intervals");
+};
+$("leftyBtn").onclick=()=>{
+  localStorage.setItem("cf_lefty", LEFTY()?"0":"1");
+  paintLefty();
+  if(CC.name) drawChord("ccDiag", CC.name);
+};
+$("tipBtn").onclick=()=>{
+  const url=localStorage.getItem("cf_tipurl");
+  if(url){ window.open(url,"_blank"); return; }
+  const v=prompt("Paste your tip-jar link (Ko-fi / Buy Me a Coffee). Saved on this device only.");
+  if(v && /^https?:\/\//.test(v)){ localStorage.setItem("cf_tipurl",v); window.open(v,"_blank"); }
+};
+
+/* ---------------- shared flash helper ---------------- */
+function flashEl(id, txt, good){
+  const el=$(id);
+  el.textContent=txt;
+  el.style.color = good ? "var(--ember)" : "var(--taupe)";
+  el.style.fontWeight = good ? "800" : "600";
+}
+
+/* ---------------- render loop ---------------- */
+function render(t){
+  if (!App.running) return;
+  if (App.mode==="tune"||App.mode==="lab") renderTuner(t);
+  /* strip */
+  if (App.stable){
+    const n=D.noteFromFreq(App.stable);
+    setStrip("heard", `hearing <span class="val mono">${n.name}${n.octave}</span> <span class="mono">${(n.cents>=0?"+":"")}${n.cents.toFixed(0)}c</span>`,
+      App.mode==="tune" && $("tuneCard").classList.contains("good"));
+  } else {
+    setStrip("listening","listening…");
+  }
+}
+setInterval(()=>{ if(App.running && !App.stable && now()-App.lastValidAt>400) render(now()); }, 300);
+
+/* ---------------- calibration ---------------- */
+let calibrating=false, calibSamples=[];
+function runCalibration(){
+  calibrating=true; calibSamples=[];
+  $("calib").classList.add("on");
+  $("calibMsg").textContent=""; $("calibRetry").style.display="none";
+  let left=3;
+  $("calibNum").textContent=left;
+  const iv=setInterval(()=>{
+    left--; $("calibNum").textContent=left>0?left:"…";
+    if(left<=0){ clearInterval(iv); finishCalibration(); }
+  },1000);
+}
+function finishCalibration(){
+  calibrating=false;
+  const med = calibSamples.length? D.median(calibSamples) : 0;
+  const floor = Math.max(med*4, 0.0025);
+  if (floor > 0.02){
+    $("calibNum").textContent="✗";
+    $("calibMsg").textContent="That room is loud (floor "+floor.toFixed(3)+"). Find somewhere quieter, or expect the ear to hesitate.";
+    $("calibRetry").style.display="block";
+    App.floor=floor; localStorage.setItem("cf_floor",String(floor));
+    return;
+  }
+  App.floor=floor; localStorage.setItem("cf_floor",String(floor));
+  $("calibNum").textContent="✓";
+  $("calibMsg").textContent="Noise floor set at "+floor.toFixed(4)+". You're ready.";
+  setTimeout(()=>$("calib").classList.remove("on"), 900);
+}
+$("calibRetry").onclick=runCalibration;
+$("recalBtn").onclick=()=>{ if(App.running) runCalibration(); };
+
+/* ---------------- stats ---------------- */
+function renderStats(){
+  if(!$("stats").classList.contains("on")) return;
+  $("stats").innerHTML =
+    `build <b>${BUILD}</b> · sampleRate <b>${App.ctx?App.ctx.sampleRate:"—"}</b> · hop <b>1024</b> · frames/s <b>${App.fps}</b><br>`+
+    `constraints ${App.trackInfo||"—"} · outLat ${App.ctx&&App.ctx.outputLatency?Math.round(App.ctx.outputLatency*1000)+"ms":"?"}<br>`+
+    `noise floor <b>${App.floor.toFixed(4)}</b> · gate <b>${gate().toFixed(4)}</b> · rms <b>${App.lastRms.toFixed(4)}</b> · clarity <b>${App.lastClar.toFixed(3)}</b> (min ${CLARITY_MIN})`;
+}
+$("statsBtn").onclick=()=>{ $("stats").classList.toggle("on"); renderStats(); };
+function anyRunning(){ return Hunt.on||Sprint.on||Beat.on||Spider.on||Chg.on||Sc.on||Iv.on||
+  Ml.on||Drone.on||SS.on||Det.on||Tg.on||Sd.on||Qc.on||Bd.on||Cp.on||Sg.on||!!CC.mode||Sync.on; }
+setInterval(()=>{ const s=$("stopBar"); if(s) s.style.display=anyRunning()?"block":"none"; }, 300);
+$("stopBtn").onclick=()=>{ stopRuns(); refreshHome(); };
+
+/* ---------------- nav / lifecycle ---------------- */
+const SUBDEFS = {
+  setup:[["lab","Tunings"],["capo","Capo"],["compass","Compass"],["into","Fret 12"]],
+  drills:[["hunt","Notes"],["sprint","Sprint"],["scales","Scales"],["drone","Drone"],["modes","Modes"]],
+  ear:[["intervals","Intervals"],["melody","Melody"],["quality","Quality"],["bass","Bass Line"]],
+  _sing:[["sing","Sing"]],
+  gym:[["beat","Beat"],["subdiv","Subdivide"],["spider","Exercises"]],
+  chords:[["check","Chords"],["changes","Changes"],["shapes","Shapes"],["targets","Targets"],["about","About"]],
+};
+function stopRuns(){
+  if (Sprint.on) endSprint();
+  Hunt.on=false; $("huntCard").style.display="none";
+  if (Beat.on){ Beat.on=false; metStop(); clearTimeout(Beat.endTimer); $("beatCard").style.display="none"; }
+  if (Spider.on){ Spider.on=false; metStop(); clearTimeout(Spider.endTimer); $("spiderCard").style.display="none"; }
+  if (Chg.on){ clearInterval(Chg.timer); Chg.on=false; $("chgCard").style.display="none"; }
+  Sc.on=false; Iv.on=false; Ml.on=false; seqStop();
+  if (Drone.on) droneStop();
+  SS.on=false; Det.on=false;
+  if (Tg.on){ Tg.on=false; metStop(); clearTimeout(Tg.endTimer); $("tgCard").style.display="none"; }
+  if (Sd.on){ Sd.on=false; metStop(); clearTimeout(Sd.endTimer); $("sdCard").style.display="none"; }
+  Qc.on=false; Bd.on=false; Cp.on=false; Sg.on=false; Seq.pcMode=false;
+  $("sgCard").style.display="none";
+  $("qcCard").style.display="none"; $("bdCard").style.display="none"; $("cpCard").style.display="none";
+  $("ssCard").style.display="none"; $("mdCard").style.display="none";
+  $("scCard").style.display="none"; $("ivCard").style.display="none"; $("mlCard").style.display="none";
+  ccStop();
+  App.capture=null;
+}
+function armFor(){
+  if (App.mode==="setup" && App.subs.setup==="capo") armCapoStep();
+  else if (App.mode==="setup" && App.subs.setup==="into") armIntoStep();
+  else if (App.mode==="chords" && App.subs.chords==="about") refreshAbout();
+  else if (App.mode==="chords") { buildChordPick(); buildChgPicks(); buildSSUI(); buildTgUI(); }
+  else if (App.mode==="drills") { buildDroneUI(); }
+}
+function buildSubnav(group){
+  const box=$(group+"Sub"); box.innerHTML="";
+  const list = group==="ear" && SINGON() ? SUBDEFS.ear.concat(SUBDEFS._sing) : SUBDEFS[group];
+  list.forEach(([k,l])=>{
+    const b=document.createElement("button");
+    b.className="chip small"+(App.subs[group]===k?" on":"");
+    b.textContent=l;
+    b.onclick=()=>setSub(group,k);
+    box.appendChild(b);
+  });
+}
+function setSub(group,sub){
+  App.subs[group]=sub; buildSubnav(group);
+  document.querySelectorAll("#p-"+group+" .sub").forEach(x=>x.classList.remove("on"));
+  $("s-"+sub).classList.add("on");
+  stopRuns(); armFor();
+}
+document.querySelectorAll("nav button").forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll("nav button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on");
+    stopRuns();
+    App.mode=b.dataset.p;
+    document.querySelectorAll(".panel").forEach(p=>p.classList.remove("on"));
+    $("p-"+App.mode).classList.add("on");
+    if (SUBDEFS[App.mode]) buildSubnav(App.mode);
+    if (App.mode==="home") refreshHome();
+    armFor();
+  };
+});
+$("micBtn").onclick=()=>{
+  if(App.running){ stopAudio(); }
+  else { $("primer").classList.add("on"); }
+};
+$("primerBtn").onclick=async ()=>{
+  try{
+    await initAudio();
+    $("primer").classList.remove("on");
+    $("micBtn").textContent="Stop";
+    setStrip("listening","listening…");
+    if(!App.floor) runCalibration();
+  }catch(e){
+    const el=$("primerErr");
+    el.style.display="block";
+    el.textContent = (e && e.name==="NotAllowedError")
+      ? "Microphone blocked. In Chrome: tap the icon left of the address bar → Permissions → Microphone → Allow, then reload."
+      : "Couldn't open the microphone: "+(e.message||e.name||e);
+  }
+};
+
+/* dial ticks + in-tune zone */
+(function(){
+  const g=$("ticks");
+  for(let c=-50;c<=50;c+=10){
+    const a=(c*1.5-90)*Math.PI/180, r1=118,r2=c%50===0?104:110;
+    const x1=150+r1*Math.cos(a),y1=150+r1*Math.sin(a);
+    const x2=150+r2*Math.cos(a),y2=150+r2*Math.sin(a);
+    g.innerHTML+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+  }
+  const a1=(-5*1.5-90)*Math.PI/180, a2=(5*1.5-90)*Math.PI/180, R=130;
+  const x1=150+R*Math.cos(a1),y1=150+R*Math.sin(a1);
+  const x2=150+R*Math.cos(a2),y2=150+R*Math.sin(a2);
+  $("zone").setAttribute("d",`M150 150 L${x1} ${y1} A${R} ${R} 0 0 1 ${x2} ${y2} Z`);
+})();
+
+/* initial UI */
+buildStringChips(); buildLab(); resetCapo(); resetInto();
+buildHuntLevels(); buildSprintStrings();
+if("serviceWorker" in navigator){
+  window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+}
+let deferredInstall=null;
+window.addEventListener("beforeinstallprompt", e=>{
+  e.preventDefault(); deferredInstall=e; $("installBtn").style.display="inline-block";
+});
+$("installBtn").onclick=async()=>{
+  if(!deferredInstall) return;
+  deferredInstall.prompt();
+  await deferredInstall.userChoice;
+  deferredInstall=null; $("installBtn").style.display="none";
+};
+window.addEventListener("appinstalled",()=>{ $("installBtn").style.display="none"; });
+$("phaseTag").textContent = BUILD;
+$("primerBuild").textContent = "build " + BUILD;
+document.title = "Campfire — " + BUILD;
+setStrip("idle","Mic is off — tap Start");
+</script>
+</body>
+</html>
