@@ -1,0 +1,21 @@
+{
+  "id": "./",
+  "name": "Campfire — Guitar Practice",
+  "short_name": "Campfire",
+  "description": "A guitar practice app that listens. Tuner, capo check, fretboard drills, rhythm gym, and chord verification — fully offline, no accounts, no tracking.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#241811",
+  "theme_color": "#241811",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["education", "music"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
