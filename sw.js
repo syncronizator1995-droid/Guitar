@@ -12,9 +12,11 @@ self.addEventListener("install", e => {
     Promise.all(SHELL.map(u => c.add(u).catch(err => console.warn("sw: skipped", u, err))))
   ).then(() => self.skipWaiting()));
 });
+/* Delete only Campfire's own old caches. Other apps on this github.io address (Grind Strat,
+   Cal Track) share Cache Storage, and deleting everything else would wipe their offline copies. */
 self.addEventListener("activate", e => {
   e.waitUntil(caches.keys()
-    .then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k))))
+    .then(ks => Promise.all(ks.filter(k => k.startsWith("campfire-") && k !== CACHE).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 self.addEventListener("fetch", e => {
